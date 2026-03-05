@@ -26,7 +26,7 @@ def draw(image, x=0, y=None, today=None):
     font_regular = ImageFont.truetype(config.FONT_PATH, 15)
     font_medium  = ImageFont.truetype(config.FONT_MEDIUM_PATH, 15)
     font_bold    = ImageFont.truetype(config.FONT_BOLD_PATH, 15)
-    font_title   = ImageFont.truetype(config.FONT_BOLD_PATH, 20)
+    font_title   = ImageFont.truetype(config.FONT_BOLD_PATH, 24)
     font_label   = ImageFont.truetype(config.FONT_MEDIUM_PATH, 14)
 
     PADDING = 14

@@ -4,24 +4,23 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 
 
-def draw(image, x=521, y=14, w=272, today=None):
+def draw(image, x=503, y=14, w=290, today=None):
     if today is None:
         today = date.today()
 
     draw_ctx = ImageDraw.Draw(image)
 
-    font_title  = ImageFont.truetype(config.FONT_BOLD_PATH, 20)
-    font_bold    = ImageFont.truetype(config.FONT_BOLD_PATH, 15)
-    font_regular = ImageFont.truetype(config.FONT_PATH, 15)
+    font_title  = ImageFont.truetype(config.FONT_BOLD_PATH, 22)
+    font_bold    = ImageFont.truetype(config.FONT_BOLD_PATH, 16)
+    font_regular = ImageFont.truetype(config.FONT_PATH, 16)
 
-    HEADER_H     = 30
-    HEADER_ROW_Y = y + 36   # day-of-week labels (+2px top padding)
-    GRID_START_Y = y + 59   # first day row (+2px below day-of-week headers)
-    ICON_SIZE    = 16
+    HEADER_H     = 34
+    HEADER_ROW_Y = y + 42   # day-of-week labels
+    GRID_START_Y = y + 66   # first day row
+    ICON_SIZE    = 18
 
-    # Fill down to year_progress top (480 - 14 - 176 = 290) with 10px gap
     import components.year_progress as _yp
-    grid_bottom  = 480 - 14 - _yp.HEIGHT - 50
+    grid_bottom  = 480 - 14 - _yp.HEIGHT - 10
     MAX_ROWS     = 6
     ROW_H        = (grid_bottom - GRID_START_Y) // MAX_ROWS
     CELL_H       = ROW_H - 4

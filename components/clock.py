@@ -20,12 +20,12 @@ def format_duration(total_minutes):
     return f'{hours}h {minutes}m'
 
 
-def draw(image, x=282, y=14, bullets=None):
+def draw(image, x=228, y=14, bullets=None):
     now = datetime.now()
     draw_ctx = ImageDraw.Draw(image)
 
-    W = 227
-    H = 228
+    W = 263
+    H = 254
     PAD = 16
 
     font_regular = ImageFont.truetype(config.FONT_PATH, 16)
@@ -48,7 +48,7 @@ def draw(image, x=282, y=14, bullets=None):
     ab = draw_ctx.textbbox((0, 0), time_ampm, font=font_time)
     total_w = (nb[2] - nb[0]) + AMPM_GAP + (ab[2] - ab[0])
 
-    time_y = y + 48
+    time_y = y + 54
     start_x = x + (W - total_w) // 2
     AMPM_DROP = 10
     draw_ctx.text((start_x - nb[0], time_y - nb[1]), time_num,  font=font_time, fill=0)
@@ -57,14 +57,14 @@ def draw(image, x=282, y=14, bullets=None):
     # --- "right now" (right-aligned) ---
     rn = 'right now'
     rn_b = draw_ctx.textbbox((0, 0), rn, font=font_small)
-    draw_ctx.text((x + W - PAD - (rn_b[2] - rn_b[0]), y + 94), rn, font=font_small, fill=0)
+    draw_ctx.text((x + W - PAD - (rn_b[2] - rn_b[0]), y + 108), rn, font=font_small, fill=0)
 
     # --- Bullets ---
     if bullets is None:
         bullets = DEFAULT_BULLETS
 
     right_limit = x + W - PAD
-    cur_y = y + 132
+    cur_y = y + 150
 
     for label, value in bullets:
         bx = x + PAD
@@ -80,8 +80,8 @@ def draw(image, x=282, y=14, bullets=None):
         val_b = draw_ctx.textbbox((0, 0), value, font=font_bold)
         if val_x + (val_b[2] - val_b[0]) <= right_limit:
             draw_ctx.text((val_x, cur_y), value, font=font_bold, fill=0)
-            cur_y += 24
+            cur_y += 26
         else:
-            cur_y += 24
+            cur_y += 26
             draw_ctx.text((bx + dot_w, cur_y), value, font=font_bold, fill=0)
-            cur_y += 24
+            cur_y += 26

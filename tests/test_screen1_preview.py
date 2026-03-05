@@ -4,7 +4,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from PIL import Image
 from renderer.base import Renderer
-from components import year_progress, calendar, clock
+from components import year_progress, calendar, clock, art_panel
 
 renderer = Renderer()
 renderer.init()
@@ -15,6 +15,7 @@ image = Image.new('L', (renderer.width, renderer.height), 255)
 year_progress.draw(image)
 calendar.draw(image)
 clock.draw(image)
+art_panel.draw(image)
 
 renderer.display(image)
 renderer.sleep()
