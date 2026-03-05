@@ -3,7 +3,13 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 
 
-def draw(image, x=0, y=206, today=None):
+# BAR_Y = y + 164, BAR_H = 12 → component bottom = y + 176
+HEIGHT = 176
+
+
+def draw(image, x=0, y=None, today=None):
+    if y is None:
+        y = 480 - 14 - HEIGHT
     if today is None:
         today = date.today()
 
