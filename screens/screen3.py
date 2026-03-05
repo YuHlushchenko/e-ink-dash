@@ -14,10 +14,15 @@ class Screen3(BaseScreen):
         self._current_path = None
         self.pick_random()
 
-    def pick_random(self):
+    def pick_random(self) -> bool:
+        """Pick a new random art. Returns True if the selection changed."""
         arts = [f for pattern in SUPPORTED for f in ARTS_DIR.glob(pattern)]
-        if arts:
-            self._current_path = random.choice(arts)
+        if len(arts) > 1:
+            arts = [f for f in arts if f != self._current_path]
+        if not arts:
+            return False
+        self._current_path = random.choice(arts)
+        return True
 
     def render(self) -> Image.Image:
         if not self._current_path or not self._current_path.exists():

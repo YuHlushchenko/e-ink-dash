@@ -47,7 +47,10 @@ e-ink-dash/
 ├── assets/
 │   └── arts/            # Local anime art images (.jpg, .png)
 ├── cache/               # SQLite cache (gitignored)
-└── hello.py             # Display test: centered text + dithered gradient bar
+└── tests/
+    ├── hello.py                    # Display test: centered text + dithered gradient bar
+    ├── test_screen3.py             # Single art display test
+    └── test_screen3_slideshow.py   # Slideshow loop (30s interval for testing)
 ```
 
 ## Dev Workflow
