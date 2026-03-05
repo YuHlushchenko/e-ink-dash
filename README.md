@@ -18,7 +18,7 @@ Personal dashboard for a 7.5" e-ink display, running on Raspberry Pi Zero 2W.
 
 ```bash
 pip3 install -e /home/<user>/e-Paper --break-system-packages
-pip3 install pillow
+pip3 install -r requirements.txt --break-system-packages
 ```
 
 **Font:** `fonts-liberation` — `LiberationMono-Regular.ttf`
@@ -26,8 +26,29 @@ pip3 install pillow
 ## Stack
 
 - Python
-- Pillow — rendering, Floyd-Steinberg dithering for gradients
+- Pillow — rendering, Floyd-Steinberg dithering
 - Waveshare e-Paper library (`waveshare_epd.epd7in5_V2`)
+- gpiozero — buttons
+
+## Project Structure
+
+```
+e-ink-dash/
+├── main.py              # entry point, screen switching
+├── config.py            # display size, font path, GPIO pins
+├── renderer/
+│   └── base.py          # Renderer: init, display, clear, sleep
+├── screens/
+│   ├── base_screen.py   # BaseScreen base class
+│   ├── screen1.py       # Clock, calendar, year progress
+│   ├── screen2.py       # AniList + MangaDex
+│   └── screen3.py       # Anime art slideshow (local, random, 15 min)
+├── api/                 # API integrations
+├── assets/
+│   └── arts/            # Local anime art images (.jpg, .png)
+├── cache/               # SQLite cache (gitignored)
+└── hello.py             # Display test: centered text + dithered gradient bar
+```
 
 ## Dev Workflow
 
@@ -37,6 +58,12 @@ Code is edited locally via SSHFS mount, files live on Pi. Run scripts via SSH:
 ssh <user>@<hostname> "python3 /home/<user>/e-ink-dash/<script>.py"
 ```
 
-## Files
+## Screens
 
-- `hello.py` — display test: centered text + dithered gradient bar
+| # | Content |
+|---|---------|
+| 1 | Clock, calendar, year progress |
+| 2 | AniList upcoming releases, MangaDex updates |
+| 3 | Full-screen anime art slideshow — images from `assets/arts/`, rotates every 15 min |
+
+Screens are switched via buttons (infinite loop: last → first → last).
