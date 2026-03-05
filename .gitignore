@@ -1,0 +1,8 @@
+.Trash-*/
+__pycache__/
+*.pyc
+*.pyo
+.env
+cache/*.db
+assets/arts/*
+!assets/arts/.gitkeep
