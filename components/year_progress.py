@@ -4,7 +4,7 @@ import config
 
 
 # BAR_Y = y + 164, BAR_H = 12 → component bottom = y + 176
-HEIGHT = 176
+HEIGHT = 192
 
 
 def draw(image, x=0, y=None, today=None):
@@ -24,9 +24,10 @@ def draw(image, x=0, y=None, today=None):
     progress_pct = int((elapsed + 1) / total_days * 100)
 
     font_regular = ImageFont.truetype(config.FONT_PATH, 15)
-    font_bold = ImageFont.truetype(config.FONT_BOLD_PATH, 15)
-    font_title = ImageFont.truetype(config.FONT_BOLD_PATH, 20)
-    font_label = ImageFont.truetype(config.FONT_PATH, 12)
+    font_medium  = ImageFont.truetype(config.FONT_MEDIUM_PATH, 15)
+    font_bold    = ImageFont.truetype(config.FONT_BOLD_PATH, 15)
+    font_title   = ImageFont.truetype(config.FONT_BOLD_PATH, 20)
+    font_label   = ImageFont.truetype(config.FONT_MEDIUM_PATH, 14)
 
     PADDING = 14
 
@@ -53,7 +54,7 @@ def draw(image, x=0, y=None, today=None):
     _draw_gradient_bar(image, right_bar_x, GRAD_Y, right_bar_w, GRAD_H, GRAD_R, reverse=True)
 
     # --- GitHub-style year grid ---
-    GRID_TOP = y + 56
+    GRID_TOP = y + 64
     SQUARE = 12
     STEP = 14   # 12px square + 2px gap
     ROWS = 7
@@ -81,7 +82,7 @@ def draw(image, x=0, y=None, today=None):
         )
 
     # --- Month labels ---
-    MONTHS_Y = y + 35
+    MONTHS_Y = y + 44
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -91,7 +92,7 @@ def draw(image, x=0, y=None, today=None):
         draw_ctx.text((GRID_LEFT + col * STEP, MONTHS_Y), name, font=font_label, fill=0)
 
     # --- Stats line: "Progress 17%" ··· bar ··· "301 Days Left" ---
-    STATS_Y = y + 162
+    STATS_Y = y + 178
     BAR_H = 12
     BAR_R = 4
     BAR_Y = STATS_Y + 2
@@ -100,22 +101,22 @@ def draw(image, x=0, y=None, today=None):
     # Text widths
     label_left = 'Progress '
     num_left = f'{progress_pct}%'
-    w_label_left = draw_ctx.textbbox((0, 0), label_left, font=font_regular)[2]
+    w_label_left = draw_ctx.textbbox((0, 0), label_left, font=font_medium)[2]
     w_num_left = draw_ctx.textbbox((0, 0), num_left, font=font_bold)[2]
 
     num_right = str(days_left)
     label_right = ' Days Left'
     w_num_right = draw_ctx.textbbox((0, 0), num_right, font=font_bold)[2]
-    w_label_right = draw_ctx.textbbox((0, 0), label_right, font=font_regular)[2]
+    w_label_right = draw_ctx.textbbox((0, 0), label_right, font=font_medium)[2]
 
     # Draw left text
-    draw_ctx.text((x + PADDING, STATS_Y), label_left, font=font_regular, fill=0)
+    draw_ctx.text((x + PADDING, STATS_Y), label_left, font=font_medium, fill=0)
     draw_ctx.text((x + PADDING + w_label_left, STATS_Y), num_left, font=font_bold, fill=0)
 
     # Draw right text
     right_text_x = x + 800 - PADDING - w_num_right - w_label_right
     draw_ctx.text((right_text_x, STATS_Y), num_right, font=font_bold, fill=0)
-    draw_ctx.text((right_text_x + w_num_right, STATS_Y), label_right, font=font_regular, fill=0)
+    draw_ctx.text((right_text_x + w_num_right, STATS_Y), label_right, font=font_medium, fill=0)
 
     # Progress bar (between texts)
     BAR_X = x + PADDING + w_label_left + w_num_left + BAR_GAP

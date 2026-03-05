@@ -4,19 +4,19 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 
 
-def draw(image, x=521, y=14, w=265, today=None):
+def draw(image, x=521, y=14, w=272, today=None):
     if today is None:
         today = date.today()
 
     draw_ctx = ImageDraw.Draw(image)
 
     font_title  = ImageFont.truetype(config.FONT_BOLD_PATH, 20)
-    font_bold   = ImageFont.truetype(config.FONT_BOLD_PATH, 14)
-    font_regular = ImageFont.truetype(config.FONT_PATH, 14)
+    font_bold    = ImageFont.truetype(config.FONT_BOLD_PATH, 15)
+    font_regular = ImageFont.truetype(config.FONT_PATH, 15)
 
-    HEADER_H     = 26
-    HEADER_ROW_Y = y + 32   # day-of-week labels
-    GRID_START_Y = y + 53   # first day row
+    HEADER_H     = 30
+    HEADER_ROW_Y = y + 36   # day-of-week labels (+2px top padding)
+    GRID_START_Y = y + 59   # first day row (+2px below day-of-week headers)
     ICON_SIZE    = 16
 
     # Fill down to year_progress top (480 - 14 - 176 = 290) with 10px gap
@@ -24,7 +24,7 @@ def draw(image, x=521, y=14, w=265, today=None):
     grid_bottom  = 480 - 14 - _yp.HEIGHT - 50
     MAX_ROWS     = 6
     ROW_H        = (grid_bottom - GRID_START_Y) // MAX_ROWS
-    CELL_H       = ROW_H - 6
+    CELL_H       = ROW_H - 4
 
     # Column positions (7 equal-ish slots)
     col_starts = [x + round(w * i / 7) for i in range(7)] + [x + w]
@@ -40,10 +40,7 @@ def draw(image, x=521, y=14, w=265, today=None):
 
     # Title
     title = today.strftime('%B %Y')
-    tb = draw_ctx.textbbox((0, 0), title, font=font_title)
-    title_x = x + (w - (tb[2] - tb[0])) // 2
-    title_y = y + (HEADER_H - (tb[3] - tb[1])) // 2
-    draw_ctx.text((title_x, title_y), title, font=font_title, fill=255)
+    draw_ctx.text((x + w // 2, y + HEADER_H // 2), title, font=font_title, fill=255, anchor='mm')
 
     # --- Day-of-week headers ---
     headers = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
