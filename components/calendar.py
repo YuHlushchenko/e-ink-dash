@@ -15,7 +15,7 @@ def _font(path: str, size: int):
     return ImageFont.truetype(path, size)
 
 
-def draw(image, x=503, y=14, w=290, today=None):
+def draw(image, x=495, y=14, w=291, today=None):
     if today is None:
         today = date.today()
 

@@ -62,7 +62,7 @@ def draw(image, x, y, w, title, eps_count, starts_in, final_ep) -> int:
     line2_y = line1_y + lh + LINE_GAP
 
     # --- Line 1: "Title... • N eps" ---
-    eps_segments = [(' \u2022 ', font_reg), (str(eps_count), font_bold), (' eps', font_reg)]
+    eps_segments = [(' \u2022 ', font_reg), (str(eps_count), font_bold), (' eps', font_bold)]
     eps_w = sum(int(draw_ctx.textlength(t, font=f)) for t, f in eps_segments)
     title_max_w = inner_w - eps_w
     title_text = _truncate(draw_ctx, title, font_bold, title_max_w)

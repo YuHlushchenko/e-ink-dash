@@ -9,7 +9,7 @@ def _font(path: str, size: int):
     return ImageFont.truetype(path, size)
 
 
-def draw(image, x=228, y=14, dt: datetime = None):
+def draw(image, x=224, y=14, dt: datetime = None):
     """
     Draw the clock widget.
     dt — datetime to render (timezone-aware or naive). Defaults to real time via get_now().
