@@ -11,62 +11,118 @@ Personal dashboard for a 7.5" e-ink display, running on Raspberry Pi Zero 2W.
 ## Setup
 
 **OS:** Raspberry Pi OS Lite 32-bit (Trixie)
-**Hostname:** `your-pi-hostname`, **User:** `your-user`
 **SPI:** enabled (`/dev/spidev0.0`, `/dev/spidev0.1`)
 
 **Dependencies:**
 
 ```bash
-pip3 install -e /home/<user>/e-Paper --break-system-packages
+# Waveshare e-Paper library
+pip3 install -e /home/<user>/e-Paper/RaspberryPi_JetsonNano/python --break-system-packages
+
+# Project dependencies
 pip3 install -r requirements.txt --break-system-packages
+
+# System library for SVG rendering
+sudo apt install libcairo2 fonts-dejavu-core
 ```
 
-**Font:** `fonts-liberation` — `LiberationMono-Regular.ttf`
+**Font:** DejaVu Sans — `/usr/share/fonts/truetype/dejavu/`
+Regular (`DejaVuSans.ttf`) + Bold (`DejaVuSans-Bold.ttf`). No Medium weight — Bold is aliased.
 
 ## Stack
 
-- Python
-- Pillow — rendering, Floyd-Steinberg dithering
+- Python + Pillow — rendering, Floyd-Steinberg dithering (grayscale → 1-bit for display)
 - Waveshare e-Paper library (`waveshare_epd.epd7in5_V2`)
-- gpiozero — buttons
+- cairosvg + libcairo2 — SVG icon rendering
+- gpiozero — hardware buttons
+- python-dotenv — API credentials from `.env`
 
 ## Project Structure
 
 ```
 e-ink-dash/
-├── main.py              # entry point, screen switching
-├── config.py            # display size, font path, GPIO pins
+├── main.py                      # entry point, scheduler loop, screen switching
+├── config.py                    # display size, font paths, GPIO pins, timezone, work hours
 ├── renderer/
-│   └── base.py          # Renderer: init, display, clear, sleep
+│   └── base.py                  # Renderer: init / display / display_partial / clear / sleep
 ├── screens/
-│   ├── base_screen.py   # BaseScreen base class
-│   ├── screen1.py       # Clock, calendar, year progress
-│   ├── screen2.py       # AniList + MangaDex
-│   └── screen3.py       # Anime art slideshow (local, random, 15 min)
-├── api/                 # API integrations
+│   ├── base_screen.py
+│   ├── screen1.py               # Clock + calendar + year progress + pixel art (done)
+│   ├── screen2.py               # AniList + MangaDex (in progress)
+│   └── screen3.py               # Full-screen anime art slideshow (done)
+├── components/
+│   ├── clock.py                 # Time, am/pm, countdown bullets
+│   ├── calendar.py              # Monthly grid, Sunday-first, today highlight
+│   ├── year_progress.py         # GitHub-style year grid + progress bar
+│   ├── art_panel.py             # Notification bar + pixel art panel
+│   └── pixel_art/
+│       └── starfield.py         # Static starfield scene (moon, stars, shooting star)
+├── api/                         # API integrations (AniList GraphQL, MangaDex REST)
 ├── assets/
-│   └── arts/            # Local anime art images (.jpg, .png)
-├── cache/               # SQLite cache (gitignored)
+│   ├── arts/                    # Local anime art images (.jpg, .png) for screen3
+│   └── icons/                   # SVG icons (bell, stars, arrows, refresh)
+├── cache/                       # SQLite cache for API responses (gitignored)
+├── utils/
+│   └── time.py                  # get_now() — timezone-aware, supports MOCK_NOW / TIME_OFFSET
 └── tests/
-    ├── hello.py                    # Display test: centered text + dithered gradient bar
-    ├── test_screen3.py             # Single art display test
-    └── test_screen3_slideshow.py   # Slideshow loop (30s interval for testing)
-```
-
-## Dev Workflow
-
-Code is edited locally via SSHFS mount, files live on Pi. Run scripts via SSH:
-
-```bash
-ssh <user>@<hostname> "python3 /home/<user>/e-ink-dash/<script>.py"
+    ├── test_screen1_preview.py  # Render screen1 on hardware
+    ├── test_dates.py            # 13 edge-case dates → PNG files in tests/output/
+    ├── test_midnight.py         # Live scheduler test, time offset to 23:57
+    ├── test_clock.py            # Clock component on hardware
+    ├── test_calendar.py         # Calendar component on hardware
+    ├── test_year_progress.py    # Year progress on hardware
+    ├── test_art_panel.py        # Art panel on hardware
+    ├── test_starfield.py        # Starfield on hardware
+    ├── test_screen3.py          # Single art display on hardware
+    └── test_screen3_slideshow.py# Slideshow loop on hardware
 ```
 
 ## Screens
 
-| # | Content |
-|---|---------|
-| 1 | Clock, calendar, year progress |
-| 2 | AniList upcoming releases, MangaDex updates |
-| 3 | Full-screen anime art slideshow — images from `assets/arts/`, rotates every 15 min |
+| # | Content | Status |
+|---|---------|--------|
+| 1 | Clock · calendar · year progress · pixel art | Done |
+| 2 | AniList upcoming releases · manga updates · queue | In progress |
+| 3 | Full-screen anime art slideshow (local images) | Done |
 
-Screens are switched via buttons (infinite loop: last → first → last).
+Screens are switched via two buttons (next / prev, infinite loop).
+
+## Update Strategy (Screen 1)
+
+- **Every minute** — partial refresh of clock region only (fast, ~0.3s)
+- **Every 5 minutes** — full refresh to clear ghosting (~3–5s)
+- **At midnight** — forced full refresh so calendar and year progress update immediately
+- **On startup** — full refresh
+
+## Dev Workflow
+
+Edit files locally via SSHFS mount; run everything via SSH on the Pi:
+
+```bash
+# Mount project locally
+sshfs <user>@<hostname>:/home/<user>/e-ink-dash ~/mnt/einkdash
+
+# Run a test on hardware
+ssh <user>@<hostname> "python3 /home/<user>/e-ink-dash/tests/test_screen1_preview.py"
+
+# Kill stale process holding GPIO/SPI
+ssh <user>@<hostname> "sudo pkill -f python3"
+```
+
+## Testing Without Hardware
+
+Use `FakeRenderer` and `config.MOCK_NOW` to render to PNG without a display:
+
+```python
+import config
+from datetime import datetime
+config.MOCK_NOW = datetime(2026, 3, 10, 14, 30)
+
+class FakeRenderer:
+    width = 800
+    height = 480
+
+from screens.screen1 import Screen1
+image = Screen1(FakeRenderer()).render()
+image.convert('1', dither=Image.FLOYDSTEINBERG).convert('L').save('preview.png')
+```
