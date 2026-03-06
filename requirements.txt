@@ -2,3 +2,4 @@ pillow>=11.0.0
 gpiozero
 python-dotenv
 cairosvg
+requests

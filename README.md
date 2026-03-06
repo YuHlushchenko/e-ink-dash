@@ -103,6 +103,50 @@ Screens are switched via two buttons (next / prev, infinite loop).
 - **At midnight** — forced full refresh so calendar and year progress update immediately
 - **On startup** — full refresh
 
+## API Credentials (AniList)
+
+### First-time setup
+
+1. Go to [anilist.co/settings/developer](https://anilist.co/settings/developer) → **Create new client**
+   - Name: `E-Ink Dashboard`
+   - Redirect URL: `http://localhost:3000`
+   - Save → copy **Client ID** and **Client Secret**
+
+2. Open in browser (replace `YOUR_CLIENT_ID`):
+   ```
+   https://anilist.co/api/v2/oauth/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code
+   ```
+   Authorize → you'll be redirected to `http://localhost:3000?code=XXXXX` → copy the `code`
+
+3. Exchange code for access token:
+   ```bash
+   curl -X POST https://anilist.co/api/v2/oauth/token \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "grant_type": "authorization_code",
+       "client_id": "YOUR_CLIENT_ID",
+       "client_secret": "YOUR_CLIENT_SECRET",
+       "redirect_uri": "http://localhost:3000",
+       "code": "YOUR_CODE"
+     }'
+   ```
+   Copy `access_token` from response.
+
+4. Copy `.env.example` → `.env` and fill in all three values:
+   ```bash
+   cp .env.example .env
+   ```
+
+> **Token expiry:** AniList tokens are valid for **1 year** (365 days). AniList does not support refresh tokens — repeat steps 2–4 annually.
+
+### API usage policy
+
+AniList is a free, open-source service. To avoid abuse/blocking:
+- All API responses are cached in `cache/anilist.db` (SQLite)
+- Media list + airing schedule: TTL 1 hour
+- User statistics: TTL 24 hours
+- Screen 2 reads from cache on every display refresh — **no API call per screen update**
+
 ## Dev Workflow
 
 Edit files locally via SSHFS mount; run everything via SSH on the Pi:
