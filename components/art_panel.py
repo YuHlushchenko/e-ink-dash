@@ -1,21 +1,16 @@
 import io
-import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw
 
-import config
-
-ARTS_DIR = Path(__file__).parent.parent / 'assets' / 'arts'
 ICONS_DIR = Path(__file__).parent.parent / 'assets' / 'icons'
-SUPPORTED = ('*.jpg', '*.jpeg', '*.png')
 
 NOTIF_H = 28   # height of notification bar
 NOTIF_R = 4    # corner radius of notification bar
 NOTIF_GAP = 8  # gap between notif bar and art image
 
 
-def draw(image, x=14, y=14, w=202, art_path=None):
+def draw(image, x=14, y=14, w=202):
     import components.year_progress as _yp
     # Art fills from below notif bar down to 10px above year_progress
     art_y = y + NOTIF_H + NOTIF_GAP
@@ -33,8 +28,8 @@ def draw(image, x=14, y=14, w=202, art_path=None):
     # 2. Icons inside notification bar (black on white)
     _draw_notif_icons(image, x, y, w)
 
-    # 3. Art image below notification bar
-    _draw_art(image, x, art_y, w, art_h, art_path)
+    # 3. Starfield static frame below notification bar
+    _draw_starfield(image, x, art_y, w, art_h)
 
 
 def _draw_notif_icons(image, panel_x, panel_y, panel_w):
@@ -66,16 +61,6 @@ def _paste_svg_icon(image, svg_path, x, y, size):
 
 
 
-def _draw_art(image, x, y, w, h, art_path):
-    if art_path is None:
-        arts = [f for pattern in SUPPORTED for f in ARTS_DIR.glob(pattern)]
-        if not arts:
-            return
-        art_path = random.choice(arts)
-
-    try:
-        art = Image.open(art_path).convert('L')
-        art = ImageOps.fit(art, (w, h), method=Image.LANCZOS)
-        image.paste(art, (x, y))
-    except Exception:
-        pass
+def _draw_starfield(image, x, y, w, h):
+    from components.pixel_art import render_starfield
+    image.paste(render_starfield(w, h), (x, y))
