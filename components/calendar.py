@@ -1,7 +1,18 @@
 import calendar as cal_module
+import io
 from datetime import date
+from functools import lru_cache
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import config
+import components.year_progress as _yp
+
+ICONS_DIR = Path(__file__).parent.parent / 'assets' / 'icons'
+
+
+@lru_cache(maxsize=None)
+def _font(path: str, size: int):
+    return ImageFont.truetype(path, size)
 
 
 def draw(image, x=503, y=14, w=290, today=None):
@@ -10,16 +21,15 @@ def draw(image, x=503, y=14, w=290, today=None):
 
     draw_ctx = ImageDraw.Draw(image)
 
-    font_title  = ImageFont.truetype(config.FONT_BOLD_PATH, 22)
-    font_bold    = ImageFont.truetype(config.FONT_BOLD_PATH, 16)
-    font_regular = ImageFont.truetype(config.FONT_PATH, 16)
+    font_title   = _font(config.FONT_BOLD_PATH, 22)
+    font_bold    = _font(config.FONT_BOLD_PATH, 16)
+    font_regular = _font(config.FONT_PATH,      16)
 
     HEADER_H     = 34
     HEADER_ROW_Y = y + 42   # day-of-week labels
     GRID_START_Y = y + 66   # first day row
     ICON_SIZE    = 18
 
-    import components.year_progress as _yp
     grid_bottom  = 480 - 14 - _yp.HEIGHT - 10
     MAX_ROWS     = 6
     ROW_H        = (grid_bottom - GRID_START_Y) // MAX_ROWS
@@ -34,8 +44,8 @@ def draw(image, x=503, y=14, w=290, today=None):
 
     # Arrows
     arrow_y = y + (HEADER_H - ICON_SIZE) // 2
-    _draw_chevron(draw_ctx, x + 8, arrow_y, ICON_SIZE, left=True)
-    _draw_chevron(draw_ctx, x + w - 8 - ICON_SIZE, arrow_y, ICON_SIZE, left=False)
+    _paste_arrow(image, x + 8,                  arrow_y, ICON_SIZE, left=True)
+    _paste_arrow(image, x + w - 8 - ICON_SIZE,  arrow_y, ICON_SIZE, left=False)
 
     # Title
     title = today.strftime('%B %Y')
@@ -79,12 +89,17 @@ def draw(image, x=503, y=14, w=290, today=None):
                 draw_ctx.text((text_x, text_y), day_str, font=font, fill=0)
 
 
-def _draw_chevron(draw_ctx, x, y, size, left=True):
-    cx = x + size // 2
-    cy = y + size // 2
-    offset = size // 3
-    if left:
-        pts = [(cx + offset // 2, cy - offset), (cx - offset // 2, cy), (cx + offset // 2, cy + offset)]
-    else:
-        pts = [(cx - offset // 2, cy - offset), (cx + offset // 2, cy), (cx - offset // 2, cy + offset)]
-    draw_ctx.line(pts, fill=255, width=2)
+def _paste_arrow(image, x, y, size, left=True):
+    try:
+        import cairosvg
+        name = 'arrow-left-rounded.svg' if left else 'arrow-right-rounded.svg'
+        svg_bytes = (ICONS_DIR / name).read_bytes()
+        png_bytes = cairosvg.svg2png(
+            bytestring=svg_bytes,
+            output_width=size, output_height=size,
+            background_color='black',
+        )
+        icon = Image.open(io.BytesIO(png_bytes)).convert('L')
+        image.paste(icon, (x, y))
+    except Exception as e:
+        print(f'[calendar] arrow icon error: {e}')

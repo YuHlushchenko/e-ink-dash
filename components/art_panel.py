@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+import components.year_progress as _yp
 
 ICONS_DIR = Path(__file__).parent.parent / 'assets' / 'icons'
 
@@ -11,7 +12,6 @@ NOTIF_GAP = 8  # gap between notif bar and art image
 
 
 def draw(image, x=14, y=14, w=202):
-    import components.year_progress as _yp
     # Art fills from below notif bar down to 10px above year_progress
     art_y = y + NOTIF_H + NOTIF_GAP
     art_bottom = 480 - 14 - _yp.HEIGHT - 10
@@ -58,7 +58,6 @@ def _paste_svg_icon(image, svg_path, x, y, size):
         image.paste(icon, (x, y))
     except Exception as e:
         print(f'[art_panel] icon error ({svg_path.name}): {e}')
-
 
 
 def _draw_starfield(image, x, y, w, h):
