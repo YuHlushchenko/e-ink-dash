@@ -2,6 +2,7 @@ from datetime import date
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 import config
+from utils.drawing import draw_gradient_bar
 
 
 @lru_cache(maxsize=None)
@@ -53,11 +54,11 @@ def draw(image, x=0, y=None, today=None):
 
     left_bar_x = x + PADDING
     left_bar_w = title_x - left_bar_x - GAP
-    _draw_gradient_bar(image, left_bar_x, GRAD_Y, left_bar_w, GRAD_H, GRAD_R, reverse=False)
+    draw_gradient_bar(image, left_bar_x, GRAD_Y, left_bar_w, GRAD_H, GRAD_R, reverse=False)
 
     right_bar_x = title_x + title_w + GAP
     right_bar_w = x + config.DISPLAY_WIDTH - PADDING - right_bar_x
-    _draw_gradient_bar(image, right_bar_x, GRAD_Y, right_bar_w, GRAD_H, GRAD_R, reverse=True)
+    draw_gradient_bar(image, right_bar_x, GRAD_Y, right_bar_w, GRAD_H, GRAD_R, reverse=True)
 
     # --- GitHub-style year grid ---
     GRID_TOP = y + 64
@@ -136,16 +137,3 @@ def draw(image, x=0, y=None, today=None):
                                 radius=BAR_R, fill=0)
 
 
-def _draw_gradient_bar(image, x, y, w, h, radius, reverse=False):
-    if w <= 0:
-        return
-    gradient = Image.new('L', (w, h))
-    g_draw = ImageDraw.Draw(gradient)
-    for i in range(w):
-        value = int(i * 255 / max(w - 1, 1))
-        if reverse:
-            value = 255 - value
-        g_draw.line([(i, 0), (i, h - 1)], fill=value)
-    mask = Image.new('L', (w, h), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
-    image.paste(gradient, (x, y), mask)
