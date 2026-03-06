@@ -39,7 +39,6 @@ def main():
     show_current()
     renderer.sleep()
 
-    # Keep process alive for button events
     from signal import pause
     pause()
 
