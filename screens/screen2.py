@@ -80,6 +80,9 @@ class Screen2(BaseScreen):
         draw = ImageDraw.Draw(image)
         draw.text((COL2_X + COL_W // 2, y2 + 2), '+3 more',
                   font=_font(config.FONT_PATH, 13), fill=0, anchor='mt')
+        y2 += 22
+        draw.text((COL2_X + COL_W // 2, y2), 'Error 500: Error description',
+                  font=_font(config.FONT_BOLD_PATH, 15), fill=0, anchor='mt')
 
         # --- Col 3 ---
         y3 = PAD
@@ -105,6 +108,9 @@ class Screen2(BaseScreen):
         draw = ImageDraw.Draw(image)
         draw.text((COL3_X + COL_W // 2, y3 + 2), '+3 more',
                   font=_font(config.FONT_PATH, 13), fill=0, anchor='mt')
+        y3 += 22
+        draw.text((COL3_X + COL_W // 2, y3), 'No updates',
+                  font=_font(config.FONT_BOLD_PATH, 15), fill=0, anchor='mt')
 
         # --- Footer ---
         draw_stats_footer(image, stats=[

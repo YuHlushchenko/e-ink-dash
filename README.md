@@ -48,13 +48,20 @@ e-ink-dash/
 ├── screens/
 │   ├── base_screen.py
 │   ├── screen1.py               # Clock + calendar + year progress + pixel art (done)
-│   ├── screen2.py               # AniList + MangaDex (in progress)
+│   ├── screen2.py               # AniList + MangaDex (UI done, API TODO)
 │   └── screen3.py               # Full-screen anime art slideshow (done)
 ├── components/
 │   ├── clock.py                 # Time, am/pm, countdown bullets
 │   ├── calendar.py              # Monthly grid, Sunday-first, today highlight
 │   ├── year_progress.py         # GitHub-style year grid + progress bar
-│   ├── art_panel.py             # Notification bar + pixel art panel
+│   ├── art_panel.py             # Notification bar (draw_notif_bar) + pixel art panel
+│   ├── section_header.py        # Reusable black rounded rect section header
+│   ├── date_separator.py        # Date label + horizontal rule
+│   ├── release_card.py          # Upcoming Releases card
+│   ├── upcoming_card.py         # Upcoming Episodes card (3-state progress bar)
+│   ├── queue_card.py            # In Queue card (2-state progress bar)
+│   ├── manga_card.py            # Manga Updates card (chapter progress bar)
+│   ├── stats_footer.py          # Bottom stats bar with gradient flanks
 │   └── pixel_art/
 │       └── starfield.py         # Static starfield scene (moon, stars, shooting star)
 ├── api/                         # API integrations (AniList GraphQL, MangaDex REST)
@@ -63,9 +70,11 @@ e-ink-dash/
 │   └── icons/                   # SVG icons (bell, stars, arrows, refresh)
 ├── cache/                       # SQLite cache for API responses (gitignored)
 ├── utils/
-│   └── time.py                  # get_now() — timezone-aware, supports MOCK_NOW / TIME_OFFSET
+│   ├── time.py                  # get_now() — timezone-aware, supports MOCK_NOW / TIME_OFFSET
+│   └── drawing.py               # draw_gradient_bar() — shared utility
 └── tests/
     ├── test_screen1_preview.py  # Render screen1 on hardware
+    ├── test_screen2_preview.py  # Render screen2 on hardware
     ├── test_dates.py            # 13 edge-case dates → PNG files in tests/output/
     ├── test_midnight.py         # Live scheduler test, time offset to 23:57
     ├── test_clock.py            # Clock component on hardware
@@ -82,7 +91,7 @@ e-ink-dash/
 | # | Content | Status |
 |---|---------|--------|
 | 1 | Clock · calendar · year progress · pixel art | Done |
-| 2 | AniList upcoming releases · manga updates · queue | In progress |
+| 2 | AniList upcoming releases · manga updates · queue | UI done, API TODO |
 | 3 | Full-screen anime art slideshow (local images) | Done |
 
 Screens are switched via two buttons (next / prev, infinite loop).
