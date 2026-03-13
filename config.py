@@ -11,6 +11,9 @@ BTN_NEXT_PIN   = 5
 BTN_PREV_PIN   = 6
 BTN_BOUNCE_TIME = 0.1   # seconds — increase if double-press, decrease if sluggish
 
+# Screen 3 — art slideshow interval (seconds). Set to 60 for testing, 900 for 15 min
+SLIDESHOW_INTERVAL = 60
+
 # --- Timezone (IANA name) ---
 # Pi reads system time from NTP — this must match the Pi's configured timezone.
 # Run `timedatectl set-timezone Europe/Kyiv` on the Pi if needed.

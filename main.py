@@ -12,7 +12,9 @@ Screen 2 update strategy:
   • All timers ≥ 1d: full refresh every hour + cache invalidation.
   • Timer hits 0   : detect via has_aired() → invalidate cache + full refresh immediately.
 
-Screen 3: static art, refreshes only on manual switch (new random art each time).
+Screen 3 update strategy:
+  • Auto-slideshow: new random art every SLIDESHOW_INTERVAL seconds (config.py).
+  • On manual switch: immediate new random art regardless of interval.
 
 Clock partial-refresh region (x must be multiple of 8):
   CLOCK_X0=224, CLOCK_Y0=8, CLOCK_X1=496, CLOCK_Y1=272
@@ -30,7 +32,7 @@ from screens.screen2 import Screen2
 from screens.screen3 import Screen3
 from utils.time import get_now
 import api.screen2_data as data_layer
-from config import BTN_NEXT_PIN, BTN_PREV_PIN, BTN_BOUNCE_TIME
+from config import BTN_NEXT_PIN, BTN_PREV_PIN, BTN_BOUNCE_TIME, SLIDESHOW_INTERVAL
 
 # Screen 1 — clock partial-refresh region (8-pixel-aligned x)
 CLOCK_X0, CLOCK_Y0, CLOCK_X1, CLOCK_Y1 = 224, 8, 496, 272
@@ -57,10 +59,11 @@ def main():
     screen2 = Screen2(renderer)
     screen3 = Screen3(renderer)
 
-    current_screen  = 0
+    current_screen   = 0
     s1_partial_count = 0
     s2_partial_count = 0
     last_s2_full     = 0.0   # epoch time of last Screen 2 full refresh
+    s3_tick          = 0     # loop iterations since last Screen 3 art change
 
     # ── Screen 1 helpers ────────────────────────────────────────────────────
 
@@ -97,8 +100,12 @@ def main():
 
     # ── Screen switching ─────────────────────────────────────────────────────
 
+    def s3_show():
+        renderer.init()
+        renderer.display(screen3.render())
+
     def switch_to(idx):
-        nonlocal current_screen
+        nonlocal current_screen, s3_tick
         current_screen = idx
         if idx == 0:
             s1_full_refresh()
@@ -108,8 +115,8 @@ def main():
             s2_full_refresh()
         else:   # idx == 2
             screen3.pick_random()
-            renderer.init()
-            renderer.display(screen3.render())
+            s3_show()
+            s3_tick = 0
 
     btn_next = Button(BTN_NEXT_PIN, bounce_time=BTN_BOUNCE_TIME)
     btn_prev = Button(BTN_PREV_PIN, bounce_time=BTN_BOUNCE_TIME)
@@ -156,7 +163,12 @@ def main():
                 data_layer.invalidate_cache()
                 s2_full_refresh()
 
-        # current_screen == 2: Screen 3 is static, nothing to update
+        elif current_screen == 2:
+            s3_tick += 1
+            if s3_tick >= max(1, SLIDESHOW_INTERVAL // 60):
+                s3_tick = 0
+                screen3.pick_random()
+                s3_show()
 
 
 if __name__ == '__main__':

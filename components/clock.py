@@ -96,18 +96,29 @@ def _compute_bullets(dt: datetime) -> list:
 
 
 def _bullet_work(dt: datetime) -> tuple:
-    """'Work ends in X' during work hours, else 'Work starts in X'."""
+    """'Work ends in X' during work hours on weekdays, else 'Work starts in X'."""
+    wd   = dt.weekday()             # Mon=0 … Fri=4, Sat=5, Sun=6
     cur  = dt.hour * 60 + dt.minute
     wst  = config.WORK_START * 60   # work start in minutes since midnight
     wend = config.WORK_END   * 60   # work end   in minutes since midnight
 
-    if wst <= cur < wend:
+    if wd < 5 and wst <= cur < wend:
         return ('Work ends in ', _fmt(wend - cur))
-    elif cur < wst:
+
+    if wd < 5 and cur < wst:
         return ('Work starts in ', _fmt(wst - cur))
-    else:
-        # After work — next start is tomorrow
-        return ('Work starts in ', _fmt(24 * 60 - cur + wst))
+
+    # After work on a weekday, or weekend — find next workday start
+    if wd == 4:    # Friday after work → Monday
+        days_ahead = 3
+    elif wd == 5:  # Saturday → Monday
+        days_ahead = 2
+    elif wd == 6:  # Sunday → Monday
+        days_ahead = 1
+    else:          # Mon–Thu after work → tomorrow
+        days_ahead = 1
+    next_start = _midnight_of(dt) + timedelta(days=days_ahead) + timedelta(minutes=wst)
+    return ('Work starts in ', _fmt(_mins_until(dt, next_start)))
 
 
 def _bullet_day_ends(dt: datetime) -> tuple:

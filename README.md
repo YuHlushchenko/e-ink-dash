@@ -100,6 +100,7 @@ e-ink-dash/
     ├── test_screen3.py          # Single art display on hardware
     ├── test_screen3_slideshow.py# Slideshow loop on hardware
     ├── test_buttons.py          # GPIO button smoke test (prints on press)
+    ├── test_screen3_preview.py  # Screen 3 PNG tests: render, empty fallback, no-repeat
     ├── test_anilist.py          # Smoke test for AniList API (all methods)
     └── test_mangadex.py         # Smoke test for MangaDex API
 ```
@@ -129,7 +130,9 @@ Screens are switched via two buttons (next / prev, infinite loop).
 - **Timer hits 0** — cache invalidated, full refresh immediately so next episode data loads
 
 **Screen 3 (Art slideshow)**
-- Static — new random art only on manual switch
+- **Auto-slideshow** — new random art every `SLIDESHOW_INTERVAL` seconds (set in `config.py`)
+- **On manual switch** — immediate new random art regardless of interval
+- Never shows the same art twice in a row
 
 ## API Credentials (AniList)
 
