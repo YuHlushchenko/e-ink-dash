@@ -25,7 +25,7 @@ def _truncate(draw_ctx, text, font, max_w):
     return text + '...'
 
 
-def _draw_mixed(draw_ctx, x, y, segments, max_x, default_fill):
+def _draw_mixed(draw_ctx, x, y, segments, max_x):
     for text, font, fill in segments:
         if x >= max_x:
             break
@@ -78,19 +78,37 @@ def draw(image, x, y, w,
     _draw_mixed(draw_ctx, inner_x, line1_y, [
         (title_text, font_bold, fg),
         *ep_seg,
-    ], max_x, fg)
+    ], max_x)
 
-    # --- Line 2: in TIME • Final DATE • WATCHED/TOTAL behind BEHIND ---
-    _draw_mixed(draw_ctx, inner_x, line2_y, [
-        ('in ',            font_reg,  fg),
-        (time_until,       font_bold, fg),
-        (' \u2022 Final ', font_reg,  fg),
-        (final_date,       font_bold, fg),
-        (' \u2022 ',           font_reg,  fg),
+    # --- Line 2: "in TIME • Final DATE • WATCHED/TOTAL [• +BEHIND]"
+    # If it doesn't fit, drop "Final DATE" to make room.
+    def _w(segs):
+        return sum(int(draw_ctx.textlength(t, font=f)) for t, f, _ in segs)
+
+    segs_full = [
+        ('in ',              font_reg,  fg),
+        (time_until,         font_bold, fg),
+        (' \u2022 Final ',   font_reg,  fg),
+        (final_date,         font_bold, fg),
+        (' \u2022 ',         font_reg,  fg),
         (f'{watched}/{total}', font_bold, fg),
-        (' \u2022 ',           font_reg,  fg),
-        (f'+{behind}',         font_bold, fg),
-    ], max_x, fg)
+    ]
+    if behind > 0:
+        segs_full += [(' \u2022 ', font_reg, fg), (f'+{behind}', font_bold, fg)]
+
+    if _w(segs_full) <= (max_x - inner_x):
+        _draw_mixed(draw_ctx, inner_x, line2_y, segs_full, max_x)
+    else:
+        # Short format: drop "Final DATE" to save ~50px
+        segs_short = [
+            ('in ',              font_reg,  fg),
+            (time_until,         font_bold, fg),
+            (' \u2022 ',         font_reg,  fg),
+            (f'{watched}/{total}', font_bold, fg),
+        ]
+        if behind > 0:
+            segs_short += [(' \u2022 ', font_reg, fg), (f'+{behind}', font_bold, fg)]
+        _draw_mixed(draw_ctx, inner_x, line2_y, segs_short, max_x)
 
     # --- Progress bar ---
     bar_x = inner_x

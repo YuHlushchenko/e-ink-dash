@@ -122,10 +122,12 @@ query ($userId: Int) {
     lists {
       entries {
         progress
+        updatedAt
         media {
           id
           title { romaji english }
           episodes
+          duration
           nextAiringEpisode {
             airingAt
             timeUntilAiring
@@ -193,6 +195,10 @@ query ($userId: Int) {
     lists {
       entries {
         completedAt { year }
+        media {
+          episodes
+          duration
+        }
       }
     }
   }

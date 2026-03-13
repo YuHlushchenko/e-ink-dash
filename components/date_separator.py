@@ -5,6 +5,10 @@ import config
 
 HEIGHT = 18
 
+_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+_DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
 
 @lru_cache(maxsize=None)
 def _font(path, size):
@@ -16,7 +20,7 @@ def draw(image, x, y, w, date: Date) -> int:
     draw_ctx = ImageDraw.Draw(image)
     font = _font(config.FONT_PATH, 14)
 
-    label = date.strftime('%b %-d, %Y • %a')
+    label = f'{_MONTHS[date.month - 1]} {date.day}, {date.year} \u2022 {_DAYS[date.weekday()]}'
     bbox = draw_ctx.textbbox((0, 0), label, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
