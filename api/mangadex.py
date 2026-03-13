@@ -228,3 +228,9 @@ def get_reading_list():
         return results
 
     return _fetch('reading_list', fetch)
+
+
+def invalidate_cache():
+    """Delete reading list cache so the next call fetches fresh data from the API."""
+    with _db() as conn:
+        conn.execute("DELETE FROM cache WHERE key='reading_list'")

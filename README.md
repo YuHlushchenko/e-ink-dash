@@ -7,6 +7,17 @@ Personal dashboard for a 7.5" e-ink display, running on Raspberry Pi Zero 2W.
 - Raspberry Pi Zero 2W
 - Waveshare 7.5" e-Paper HAT (800x480, B&W), Driver HAT Rev2.3
 - Driver HAT switches: Display Config B, Interface Config 0 (4-line SPI)
+- 2× tactile push buttons (next / prev screen)
+
+### Button Wiring
+
+| Button | Pi Pin | Pi GPIO |
+|--------|--------|---------|
+| Next   | Board 29 | GPIO 5 |
+| Prev   | Board 31 | GPIO 6 |
+| GND (shared) | Board 30 | GND |
+
+Each button connects between its GPIO pin and GND. No external pull-up resistor needed — gpiozero enables the internal pull-up automatically (`pull_up=True` by default).
 
 ## Setup
 

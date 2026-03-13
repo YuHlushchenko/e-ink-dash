@@ -17,6 +17,7 @@ from api.anilist import (
     get_planning_anime,
     get_user_stats,
     get_completed_anime,
+    invalidate_cache as _anilist_invalidate,
 )
 
 
@@ -118,6 +119,7 @@ def get_upcoming_releases():
             'starts_in':   _fmt_duration(seconds_until),
             'final_ep':    final_ep,
             'airing_date': _ts_to_date(airing_at),
+            'airing_at':   airing_at,
         })
 
     items.sort(key=lambda x: x['airing_date'])
@@ -171,6 +173,7 @@ def get_upcoming_episodes():
             'behind':      behind,
             'highlight':   is_final,
             'airing_date': _ts_to_date(airing_at),
+            'airing_at':   airing_at,
         })
 
     items.sort(key=lambda x: x['airing_date'])
@@ -289,3 +292,33 @@ def get_stats():
         'total_hours':    minutes_this_year // 60,
         'manga_reading':  manga_reading,
     }, (errors[0] if errors else None)
+
+
+def has_imminent(threshold: int = 86400) -> bool:
+    """True if any upcoming release or episode airs within `threshold` seconds."""
+    now = int(time.time())
+    for get_fn in (get_upcoming_releases, get_upcoming_episodes):
+        items, _ = get_fn()
+        for item in (items or []):
+            at = item.get('airing_at', 0)
+            if 0 < at - now < threshold:
+                return True
+    return False
+
+
+def has_aired() -> bool:
+    """True if any cached upcoming item has already aired (cache is stale)."""
+    now = int(time.time())
+    for get_fn in (get_upcoming_releases, get_upcoming_episodes):
+        items, _ = get_fn()
+        for item in (items or []):
+            at = item.get('airing_at', 0)
+            if 0 < at <= now:
+                return True
+    return False
+
+
+def invalidate_cache():
+    """Force fresh API data on next Screen 2 render."""
+    _anilist_invalidate()
+    mangadex.invalidate_cache()

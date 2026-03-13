@@ -7,8 +7,9 @@ FONT_MEDIUM_PATH = f'{_DEJAVU}/DejaVuSans-Bold.ttf'
 FONT_BOLD_PATH   = f'{_DEJAVU}/DejaVuSans-Bold.ttf'
 
 # GPIO pins for buttons (adjust to your wiring)
-BTN_NEXT_PIN = 5
-BTN_PREV_PIN = 6
+BTN_NEXT_PIN   = 5
+BTN_PREV_PIN   = 6
+BTN_BOUNCE_TIME = 0.1   # seconds — increase if double-press, decrease if sluggish
 
 # --- Timezone (IANA name) ---
 # Pi reads system time from NTP — this must match the Pi's configured timezone.

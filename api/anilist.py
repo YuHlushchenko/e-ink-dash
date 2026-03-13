@@ -209,3 +209,9 @@ def get_user_stats():
 def get_completed_anime():
     """Completed anime list (for counting completed in current year). Returns (data, error)."""
     return _fetch('completed_anime', TTL_STATS, _Q_COMPLETED_ANIME, {'userId': _USER_ID})
+
+
+def invalidate_cache():
+    """Delete list caches so the next call fetches fresh data from the API."""
+    with _db() as conn:
+        conn.execute("DELETE FROM cache WHERE key IN ('current_anime', 'planning_anime')")
