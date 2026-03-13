@@ -65,7 +65,8 @@ e-ink-dash/
 │   └── pixel_art/
 │       └── starfield.py         # Static starfield scene (moon, stars, shooting star)
 ├── api/
-│   └── anilist.py               # AniList GraphQL client, SQLite cache, (data, error) returns
+│   ├── anilist.py               # AniList GraphQL client, SQLite cache, (data, error) returns
+│   └── screen2_data.py          # Transforms AniList responses into card-ready dicts for Screen 2
 ├── assets/
 │   ├── arts/                    # Local anime art images (.jpg, .png) for screen3
 │   └── icons/                   # SVG icons (bell, stars, arrows, refresh)
@@ -94,7 +95,7 @@ e-ink-dash/
 | # | Content | Status |
 |---|---------|--------|
 | 1 | Clock · calendar · year progress · pixel art | Done |
-| 2 | AniList upcoming releases · manga updates · queue | UI done, API client done, integration TODO |
+| 2 | AniList upcoming releases · episodes · queue · manga · stats footer | Done (MangaDex TODO) |
 | 3 | Full-screen anime art slideshow (local images) | Done |
 
 Screens are switched via two buttons (next / prev, infinite loop).
