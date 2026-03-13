@@ -40,6 +40,26 @@ sudo apt install libcairo2 fonts-dejavu-core
 **Font:** DejaVu Sans — `/usr/share/fonts/truetype/dejavu/`
 Regular (`DejaVuSans.ttf`) + Bold (`DejaVuSans-Bold.ttf`). No Medium weight — Bold is aliased.
 
+**Autostart (systemd):**
+
+```bash
+# 1. Copy the example and fill in your username
+cp einkdash.service.example einkdash.service
+# Edit einkdash.service — replace all <your-username> with your Pi username
+
+# 2. Install and enable
+sudo cp einkdash.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable einkdash
+sudo systemctl start einkdash
+
+# Check status / logs
+sudo systemctl status einkdash
+journalctl -u einkdash -f
+```
+
+> `einkdash.service` is gitignored (contains local paths). `einkdash.service.example` is the template.
+
 ## Stack
 
 - Python + Pillow — rendering, Floyd-Steinberg dithering (grayscale → 1-bit for display)

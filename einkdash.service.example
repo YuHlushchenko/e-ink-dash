@@ -1,0 +1,20 @@
+[Unit]
+Description=E-ink Dashboard
+After=network.target
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=<your-username>
+WorkingDirectory=/home/<your-username>/e-ink-dash
+ExecStart=/usr/bin/python3 /home/<your-username>/e-ink-dash/main.py
+# Path to the Waveshare e-Paper library (installed via pip install -e)
+Environment=PYTHONPATH=/home/<your-username>/e-Paper/RaspberryPi_JetsonNano/python/lib
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
