@@ -183,7 +183,7 @@ class Screen2(BaseScreen):
             ('Planning: ',           str(stats['planning'])),
             (f'Completed {year}: ',  str(stats['completed_year'])),
             (f'Hours {year}: ',      str(stats['total_hours'])),
-            ('Manga chapters: ',     str(stats['manga_chapters'])),
+            ('Reading manga: ',       str(stats['manga_reading'])),
         ])
 
         return image

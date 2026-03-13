@@ -11,10 +11,10 @@ Public functions — all return (list_or_dict, error_or_None):
 import time
 from datetime import date, datetime
 
+import api.mangadex as mangadex
 from api.anilist import (
     get_current_anime,
     get_planning_anime,
-    get_current_manga,
     get_user_stats,
     get_completed_anime,
 )
@@ -208,34 +208,40 @@ def get_queue():
     return items, err
 
 
+def _to_float(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_manga_updates():
     """
-    Currently reading manga. Sorted by most unread chapters first.
+    Currently reading manga from MangaDex. Sorted by unread chapters first.
     Returns (list[{title, current_ch, total_ch, status}], error).
     """
-    data, err = get_current_manga()
-    entries = _entries(data)
+    data, err = mangadex.get_reading_list()
 
     items = []
-    for e in entries:
-        m         = e['media']
-        progress  = e.get('progress') or 0
-        total_ch  = m.get('chapters') or 0
-        new_chs   = max(0, total_ch - progress) if total_ch else 0
+    for m in (data or []):
+        latest = _to_float(m.get('latest_chapter'))
+        read   = _to_float(m.get('read_chapter'))
 
-        if not total_ch:
+        current_ch = int(read)   if read   is not None else 0
+        total_ch   = int(latest) if latest is not None else max(current_ch, 1)
+        new_chs    = max(0, total_ch - current_ch) if latest is not None else 0
+
+        if latest is None:
             status = 'Ongoing'
-        elif new_chs == 0:
+        elif not m['has_unread']:
             status = 'Up to date'
-        elif new_chs == 1:
-            status = 'New chapter available'
         else:
-            status = f'{new_chs} new chapters'
+            status = f'+{new_chs} new'
 
         items.append({
-            'title':      _title(m),
-            'current_ch': progress,
-            'total_ch':   total_ch if total_ch else max(progress, 1),
+            'title':      m['title'].translate(_TITLE_SUBS),
+            'current_ch': current_ch,
+            'total_ch':   total_ch,
             'status':     status,
             '_sort':      new_chs,
         })
@@ -247,13 +253,13 @@ def get_manga_updates():
 def get_stats():
     """
     Aggregate stats for the footer bar.
-    Returns ({watching, planning, completed_year, total_hours, manga_chapters}, error).
+    Returns ({watching, planning, completed_year, total_hours, manga_reading}, error).
     """
     current_data,   err1 = get_current_anime()
     planning_data,  err2 = get_planning_anime()
     stats_data,     err3 = get_user_stats()
     completed_data, err4 = get_completed_anime()
-    manga_data,     err5 = get_current_manga()
+    manga_data,     err5 = mangadex.get_reading_list()
 
     watching = len(_entries(current_data))
     planning = len(_entries(planning_data))
@@ -273,16 +279,7 @@ def get_stats():
         duration = (e.get('media') or {}).get('duration') or 0
         minutes_this_year += progress * duration
 
-    chapters_read = 0
-    if stats_data:
-        viewer = (stats_data.get('Viewer') or {})
-        stats  = (viewer.get('statistics') or {})
-        chapters_read = (stats.get('manga') or {}).get('chaptersRead') or 0
-
-    # Fallback for new users: sum progress from current manga
-    if chapters_read == 0:
-        for e in _entries(manga_data):
-            chapters_read += e.get('progress') or 0
+    manga_reading = len(manga_data) if manga_data else 0
 
     errors = [e for e in [err1, err2, err3, err4, err5] if e]
     return {
@@ -290,5 +287,5 @@ def get_stats():
         'planning':       planning,
         'completed_year': completed_year,
         'total_hours':    minutes_this_year // 60,
-        'manga_chapters': chapters_read,
+        'manga_reading':  manga_reading,
     }, (errors[0] if errors else None)
