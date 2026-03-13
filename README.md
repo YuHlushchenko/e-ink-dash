@@ -59,7 +59,7 @@ e-ink-dash/
 ├── screens/
 │   ├── base_screen.py
 │   ├── screen1.py               # Clock + calendar + year progress + pixel art (done)
-│   ├── screen2.py               # AniList + MangaDex (UI done, API TODO)
+│   ├── screen2.py               # AniList + MangaDex dashboard (done)
 │   └── screen3.py               # Full-screen anime art slideshow (done)
 ├── components/
 │   ├── clock.py                 # Time, am/pm, countdown bullets
@@ -99,6 +99,7 @@ e-ink-dash/
     ├── test_starfield.py        # Starfield on hardware
     ├── test_screen3.py          # Single art display on hardware
     ├── test_screen3_slideshow.py# Slideshow loop on hardware
+    ├── test_buttons.py          # GPIO button smoke test (prints on press)
     ├── test_anilist.py          # Smoke test for AniList API (all methods)
     └── test_mangadex.py         # Smoke test for MangaDex API
 ```
@@ -113,12 +114,22 @@ e-ink-dash/
 
 Screens are switched via two buttons (next / prev, infinite loop).
 
-## Update Strategy (Screen 1)
+## Update Strategy
 
-- **Every minute** — partial refresh of clock region only (fast, ~0.3s)
+**Screen 1 (Clock)**
+- **Every minute** — partial refresh of clock region only (~0.3s)
 - **Every 5 minutes** — full refresh to clear ghosting (~3–5s)
 - **At midnight** — forced full refresh so calendar and year progress update immediately
 - **On startup** — full refresh
+
+**Screen 2 (AniList / MangaDex)**
+- **On switch** — API cache invalidated, full refresh with fresh data
+- **Any timer < 24h** — partial refresh of Col1 + Col2 every minute; full refresh every 5 partials (anti-ghosting)
+- **All timers ≥ 1 day** — full refresh every hour + cache invalidation
+- **Timer hits 0** — cache invalidated, full refresh immediately so next episode data loads
+
+**Screen 3 (Art slideshow)**
+- Static — new random art only on manual switch
 
 ## API Credentials (AniList)
 
