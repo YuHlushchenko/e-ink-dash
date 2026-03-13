@@ -122,10 +122,12 @@ query ($userId: Int) {
     lists {
       entries {
         progress
+        updatedAt
         media {
           id
           title { romaji english }
           episodes
+          duration
           nextAiringEpisode {
             airingAt
             timeUntilAiring
@@ -159,29 +161,11 @@ query ($userId: Int) {
 }
 '''
 
-_Q_CURRENT_MANGA = '''
-query ($userId: Int) {
-  MediaListCollection(userId: $userId, type: MANGA, status: CURRENT) {
-    lists {
-      entries {
-        progress
-        media {
-          id
-          title { romaji english }
-          chapters
-        }
-      }
-    }
-  }
-}
-'''
-
 _Q_USER_STATS = '''
 query {
   Viewer {
     statistics {
       anime { minutesWatched }
-      manga { chaptersRead }
     }
   }
 }
@@ -193,6 +177,10 @@ query ($userId: Int) {
     lists {
       entries {
         completedAt { year }
+        media {
+          episodes
+          duration
+        }
       }
     }
   }
@@ -213,13 +201,8 @@ def get_planning_anime():
     return _fetch('planning_anime', TTL_LIST, _Q_PLANNING_ANIME, {'userId': _USER_ID})
 
 
-def get_current_manga():
-    """Currently reading manga. Returns (data, error)."""
-    return _fetch('current_manga', TTL_LIST, _Q_CURRENT_MANGA, {'userId': _USER_ID})
-
-
 def get_user_stats():
-    """User statistics (minutes watched, chapters read). Returns (data, error)."""
+    """User anime statistics (minutesWatched). Returns (data, error)."""
     return _fetch('user_stats', TTL_STATS, _Q_USER_STATS)
 
 

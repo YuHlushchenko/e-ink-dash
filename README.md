@@ -64,10 +64,14 @@ e-ink-dash/
 │   ├── stats_footer.py          # Bottom stats bar with gradient flanks
 │   └── pixel_art/
 │       └── starfield.py         # Static starfield scene (moon, stars, shooting star)
-├── api/                         # API integrations (AniList GraphQL, MangaDex REST)
+├── api/
+│   ├── anilist.py               # AniList GraphQL client, SQLite cache, (data, error) returns
+│   ├── mangadex.py              # MangaDex REST client, OAuth2, SQLite cache, (data, error) returns
+│   └── screen2_data.py          # Transforms AniList + MangaDex responses into card-ready dicts
 ├── assets/
 │   ├── arts/                    # Local anime art images (.jpg, .png) for screen3
 │   └── icons/                   # SVG icons (bell, stars, arrows, refresh)
+├── .env.example                 # Template for AniList + MangaDex credentials
 ├── cache/                       # SQLite cache for API responses (gitignored)
 ├── utils/
 │   ├── time.py                  # get_now() — timezone-aware, supports MOCK_NOW / TIME_OFFSET
@@ -83,7 +87,9 @@ e-ink-dash/
     ├── test_art_panel.py        # Art panel on hardware
     ├── test_starfield.py        # Starfield on hardware
     ├── test_screen3.py          # Single art display on hardware
-    └── test_screen3_slideshow.py# Slideshow loop on hardware
+    ├── test_screen3_slideshow.py# Slideshow loop on hardware
+    ├── test_anilist.py          # Smoke test for AniList API (all methods)
+    └── test_mangadex.py         # Smoke test for MangaDex API
 ```
 
 ## Screens
@@ -91,7 +97,7 @@ e-ink-dash/
 | # | Content | Status |
 |---|---------|--------|
 | 1 | Clock · calendar · year progress · pixel art | Done |
-| 2 | AniList upcoming releases · manga updates · queue | UI done, API TODO |
+| 2 | AniList upcoming releases · episodes · queue + MangaDex manga · stats footer | Done |
 | 3 | Full-screen anime art slideshow (local images) | Done |
 
 Screens are switched via two buttons (next / prev, infinite loop).
@@ -146,6 +152,36 @@ AniList is a free, open-source service. To avoid abuse/blocking:
 - Media list + airing schedule: TTL 1 hour
 - User statistics: TTL 24 hours
 - Screen 2 reads from cache on every display refresh — **no API call per screen update**
+
+## API Credentials (MangaDex)
+
+### First-time setup
+
+1. Create a free account at [mangadex.org](https://mangadex.org)
+
+2. Go to [mangadex.org/settings](https://mangadex.org/settings) → **API Clients** → **Create**
+   - Name: `E-Ink Dashboard`
+   - Description: any text
+   - Client type: **Personal** (only option for personal use)
+   - Save → you'll get a **Client ID** and **Client Secret**
+
+3. Add to `.env`:
+   ```
+   MANGADEX_USERNAME=your_username
+   MANGADEX_PASSWORD=your_password
+   MANGADEX_CLIENT_ID=your_client_id
+   MANGADEX_CLIENT_SECRET=your_client_secret
+   ```
+
+4. Mark manga you're reading as **Reading** in your MangaDex library, and mark chapters read so the progress tracking works.
+
+> **Auth:** MangaDex uses OAuth2 password flow. Access tokens (~15 min lifetime) are refreshed automatically using the stored refresh token. No manual renewal needed.
+
+### API usage policy
+
+- All responses cached in `cache/mangadex.db` (SQLite), TTL 1 hour
+- Manga reading list: fetches status → batch titles → per-manga chapter feed + read markers
+- Screen 2 reads from cache — **no API call per screen update**
 
 ## Dev Workflow
 

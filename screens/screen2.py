@@ -1,16 +1,17 @@
-from datetime import date
+from datetime import datetime
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 from screens.base_screen import BaseScreen
 from components.art_panel import draw_notif_bar
 from components.section_header import draw as draw_header, SECTION_H
-import config
 from components.date_separator import draw as draw_date_sep
 from components.release_card import draw as draw_release_card
 from components.upcoming_card import draw as draw_upcoming_card
 from components.queue_card import draw as draw_queue_card
 from components.manga_card import draw as draw_manga_card
-from components.stats_footer import draw as draw_stats_footer
+from components.stats_footer import draw as draw_stats_footer, HEIGHT as FOOTER_H
+import config
+import api.screen2_data as data_layer
 
 PAD = 14
 GAP = 8
@@ -18,8 +19,18 @@ COL_W = (800 - 2 * PAD - 2 * GAP) // 3   # 252px
 COL1_X = PAD
 COL2_X = PAD + COL_W + GAP
 COL3_X = PAD + 2 * COL_W + 2 * GAP
-NOTIF_H = 28
-NOTIF_GAP = 6
+
+GAP_AFTER_HEADER = 6
+GAP_AFTER_DATE   = 4
+GAP_AFTER_CARD   = 6
+
+# Height estimates for overflow checks (col2/col3 cards have progress bar)
+_CARD_H_EST    = 62   # PAD*2 + 2 lines + bar + bar_gap
+_DATE_H_EST    = 20   # date_separator.HEIGHT=18 + small buffer
+_MORE_H_EST    = 20   # "+N more" text
+_SECTION_H_EST = SECTION_H + GAP_AFTER_HEADER
+
+CARD_AREA_BOTTOM = 480 - PAD - FOOTER_H - GAP   # ≈ 434
 
 
 @lru_cache(maxsize=None)
@@ -27,98 +38,152 @@ def _font(path, size):
     return ImageFont.truetype(path, size)
 
 
+def _fits(y, card_h=None, needs_date_sep=False, needs_section=False):
+    """Return True if there is room for a card (+ optional separator/header)."""
+    if card_h is None:
+        card_h = _CARD_H_EST
+    extra = (_DATE_H_EST if needs_date_sep else 0) + (_SECTION_H_EST if needs_section else 0)
+    return y + extra + card_h + _MORE_H_EST <= CARD_AREA_BOTTOM
+
+
+def _draw_more(draw_ctx, x, y, remaining):
+    draw_ctx.text(
+        (x + COL_W // 2, y + 2),
+        f'+{remaining} more',
+        font=_font(config.FONT_PATH, 13), fill=0, anchor='mt',
+    )
+
+
+def _draw_empty(draw_ctx, x, y, message='No updates'):
+    draw_ctx.text(
+        (x + COL_W // 2, y + 2),
+        message,
+        font=_font(config.FONT_BOLD_PATH, 15), fill=0, anchor='mt',
+    )
+
+
 class Screen2(BaseScreen):
     def render(self) -> Image.Image:
-        image = Image.new('L', (self.width, self.height), 255)
+        image    = Image.new('L', (self.width, self.height), 255)
+        draw_ctx = ImageDraw.Draw(image)
 
-        GAP_AFTER_HEADER = 6
-        GAP_AFTER_DATE   = 4
-        GAP_AFTER_CARD   = 6
+        releases, err_rel = data_layer.get_upcoming_releases()
+        episodes, err_ep  = data_layer.get_upcoming_episodes()
+        queue,    err_q   = data_layer.get_queue()
+        manga,    err_mg  = data_layer.get_manga_updates()
+        stats,    _       = data_layer.get_stats()
 
-        # --- Col 1 ---
+        # ── Col 1 — Upcoming Releases ──────────────────────────────────────
         y1 = draw_notif_bar(image, x=COL1_X, y=PAD, w=COL_W) + GAP_AFTER_HEADER
         y1 = draw_header(image, COL1_X, y1, COL_W, 'Upcoming Releases') + GAP_AFTER_HEADER
 
-        y1 = draw_date_sep(image, COL1_X, y1, COL_W, date(2026, 4, 1)) + GAP_AFTER_DATE
-        y1 = draw_release_card(image, COL1_X, y1, COL_W,
-                               'Classroom of the Elite 2nd Year', 12, '11d 3h', 'Jun 28') + GAP_AFTER_CARD
+        if err_rel and not releases:
+            _draw_empty(draw_ctx, COL1_X, y1, f'Error: {err_rel[:30]}')
+        elif not releases:
+            _draw_empty(draw_ctx, COL1_X, y1)
+        else:
+            MAX_RELEASES = 4
+            last_date = None
+            for item in releases[:MAX_RELEASES]:
+                need_sep = item['airing_date'] != last_date
+                if need_sep:
+                    y1 = draw_date_sep(image, COL1_X, y1, COL_W, item['airing_date']) + GAP_AFTER_DATE
+                    last_date = item['airing_date']
+                y1 = draw_release_card(
+                    image, COL1_X, y1, COL_W,
+                    item['title'], item['eps_count'],
+                    item['starts_in'], item['final_ep'],
+                ) + GAP_AFTER_CARD
+            remaining = max(0, len(releases) - MAX_RELEASES)
+            if remaining > 0:
+                _draw_more(draw_ctx, COL1_X, y1, remaining)
 
-        y1 = draw_date_sep(image, COL1_X, y1, COL_W, date(2026, 4, 8)) + GAP_AFTER_DATE
-        y1 = draw_release_card(image, COL1_X, y1, COL_W,
-                               'Dungeon Meshi Season 2', 24, '18d 5h', 'Sep 12') + GAP_AFTER_CARD
+        # ── Col 2 — Upcoming Episodes ──────────────────────────────────────
+        y2 = draw_header(image, COL2_X, PAD, COL_W, 'Upcoming Episodes') + GAP_AFTER_HEADER
 
-        y1 = draw_date_sep(image, COL1_X, y1, COL_W, date(2026, 5, 3)) + GAP_AFTER_DATE
-        y1 = draw_release_card(image, COL1_X, y1, COL_W,
-                               'Vinland Saga Season 3', 13, '43d 1h', 'Aug 2') + GAP_AFTER_CARD
+        if err_ep and not episodes:
+            _draw_empty(draw_ctx, COL2_X, y2, f'Error: {err_ep[:30]}')
+        elif not episodes:
+            _draw_empty(draw_ctx, COL2_X, y2)
+        else:
+            last_date = None
+            shown = 0
+            for item in episodes:
+                need_sep = item['airing_date'] != last_date
+                if not _fits(y2, needs_date_sep=need_sep):
+                    break
+                if need_sep:
+                    y2 = draw_date_sep(image, COL2_X, y2, COL_W, item['airing_date']) + GAP_AFTER_DATE
+                    last_date = item['airing_date']
+                y2 = draw_upcoming_card(
+                    image, COL2_X, y2, COL_W,
+                    item['title'], item['ep_label'],
+                    item['time_until'], item['final_date'],
+                    item['watched'], item['total'], item['behind'],
+                    highlight=item['highlight'],
+                ) + GAP_AFTER_CARD
+                shown += 1
+            remaining = len(episodes) - shown
+            if remaining > 0:
+                _draw_more(draw_ctx, COL2_X, y2, remaining)
 
-        y1 = draw_date_sep(image, COL1_X, y1, COL_W, date(2026, 5, 15)) + GAP_AFTER_DATE
-        y1 = draw_release_card(image, COL1_X, y1, COL_W,
-                               'Attack on Titan Final Season', 8, '55d 2h', 'Oct 5') + GAP_AFTER_CARD
+        # ── Col 3 — In Queue + Manga Updates ──────────────────────────────
+        y3 = draw_header(image, COL3_X, PAD, COL_W, 'In Queue') + GAP_AFTER_HEADER
 
-        draw = ImageDraw.Draw(image)
-        draw.text((COL1_X + COL_W // 2, y1 + 2), '+3 more',
-                  font=_font(config.FONT_PATH, 13), fill=0, anchor='mt')
+        if err_q and not queue:
+            _draw_empty(draw_ctx, COL3_X, y3, f'Error: {err_q[:30]}')
+            y3 += _MORE_H_EST
+        elif not queue:
+            _draw_empty(draw_ctx, COL3_X, y3)
+            y3 += _MORE_H_EST
+        else:
+            shown = 0
+            for item in queue:
+                if not _fits(y3):
+                    break
+                y3 = draw_queue_card(
+                    image, COL3_X, y3, COL_W,
+                    item['title'], item['watched'],
+                    item['total'], item['last_updated'],
+                ) + GAP_AFTER_CARD
+                shown += 1
+            remaining = len(queue) - shown
+            if remaining > 0:
+                _draw_more(draw_ctx, COL3_X, y3, remaining)
+                y3 += _MORE_H_EST
 
-        # --- Col 2 ---
-        y2 = PAD
-        y2 = draw_header(image, COL2_X, y2, COL_W, 'Upcoming Episodes') + GAP_AFTER_HEADER
+        # Manga section — only if there's enough space for header + 1 card
+        if _fits(y3, needs_section=True):
+            y3 += GAP
+            y3 = draw_header(image, COL3_X, y3, COL_W, 'Manga Updates') + GAP_AFTER_HEADER
 
-        y2 = draw_date_sep(image, COL2_X, y2, COL_W, date(2026, 3, 25)) + GAP_AFTER_DATE
-        # Two episodes on the same date — no separator between them
-        y2 = draw_upcoming_card(image, COL2_X, y2, COL_W,
-             "Hell's Paradise Season 2", '9 ep', '4d 3h', 'Apr 28',
-             watched=6, total=12, behind=2) + GAP_AFTER_CARD
-        y2 = draw_upcoming_card(image, COL2_X, y2, COL_W,
-             'Witch Hat Atelier', 'FINAL', '4d 3h', 'Apr 28',
-             watched=9, total=12, behind=2, highlight=True) + GAP_AFTER_CARD
+            if err_mg and not manga:
+                _draw_empty(draw_ctx, COL3_X, y3, f'Error: {err_mg[:30]}')
+            elif not manga:
+                _draw_empty(draw_ctx, COL3_X, y3)
+            else:
+                shown = 0
+                for item in manga:
+                    if not _fits(y3):
+                        break
+                    y3 = draw_manga_card(
+                        image, COL3_X, y3, COL_W,
+                        item['title'], item['current_ch'],
+                        item['total_ch'], item['status'],
+                    ) + GAP_AFTER_CARD
+                    shown += 1
+                remaining = len(manga) - shown
+                if remaining > 0:
+                    _draw_more(draw_ctx, COL3_X, y3, remaining)
 
-        y2 = draw_date_sep(image, COL2_X, y2, COL_W, date(2026, 4, 1)) + GAP_AFTER_DATE
-        y2 = draw_upcoming_card(image, COL2_X, y2, COL_W,
-             'Frieren: Beyond Journey\'s End', '28 ep', '12d 1h', '∞',
-             watched=10, total=28, behind=3) + GAP_AFTER_CARD
-
-        draw = ImageDraw.Draw(image)
-        draw.text((COL2_X + COL_W // 2, y2 + 2), '+3 more',
-                  font=_font(config.FONT_PATH, 13), fill=0, anchor='mt')
-        y2 += 22
-        draw.text((COL2_X + COL_W // 2, y2), 'Error 500: Error description',
-                  font=_font(config.FONT_BOLD_PATH, 15), fill=0, anchor='mt')
-
-        # --- Col 3 ---
-        y3 = PAD
-        y3 = draw_header(image, COL3_X, y3, COL_W, 'In Queue') + GAP_AFTER_HEADER
-        y3 = draw_queue_card(image, COL3_X, y3, COL_W,
-             "Hell's Paradise Season 2", watched=0, total=12, last_updated='Mar 15, 2025') + GAP_AFTER_CARD
-        y3 = draw_queue_card(image, COL3_X, y3, COL_W,
-             "Hell's Paradise Season 2", watched=10, total=12, last_updated='Mar 15, 2025') + GAP_AFTER_CARD
-
-        draw = ImageDraw.Draw(image)
-        draw.text((COL3_X + COL_W // 2, y3 + 2), '+3 more',
-                  font=_font(config.FONT_PATH, 13), fill=0, anchor='mt')
-        y3 += 20
-
-        y3 = draw_header(image, COL3_X, y3, COL_W, 'Manga Updates') + GAP_AFTER_HEADER
-        y3 = draw_manga_card(image, COL3_X, y3, COL_W,
-             'Dungeon Meshi', current_ch=45, total_ch=97,
-             status='New chapter available') + GAP_AFTER_CARD
-        y3 = draw_manga_card(image, COL3_X, y3, COL_W,
-             'Berserk', current_ch=364, total_ch=374,
-             status='2 new chapters') + GAP_AFTER_CARD
-
-        draw = ImageDraw.Draw(image)
-        draw.text((COL3_X + COL_W // 2, y3 + 2), '+3 more',
-                  font=_font(config.FONT_PATH, 13), fill=0, anchor='mt')
-        y3 += 22
-        draw.text((COL3_X + COL_W // 2, y3), 'No updates',
-                  font=_font(config.FONT_BOLD_PATH, 15), fill=0, anchor='mt')
-
-        # --- Footer ---
+        # ── Footer ────────────────────────────────────────────────────────
+        year = datetime.now().year
         draw_stats_footer(image, stats=[
-            ('Watching: ',        '12'),
-            ('Planning: ',        '3'),
-            ('Completed 2026: ',  '8'),
-            ('Total hours: ',     '342'),
-            ('Manga chapters: ',  '15'),
+            ('Watching: ',           str(stats['watching'])),
+            ('Planning: ',           str(stats['planning'])),
+            (f'Completed {year}: ',  str(stats['completed_year'])),
+            (f'Hours {year}: ',      str(stats['total_hours'])),
+            ('Reading manga: ',       str(stats['manga_reading'])),
         ])
 
         return image
