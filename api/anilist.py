@@ -153,6 +153,7 @@ query ($userId: Int) {
           title { romaji english }
           episodes
           startDate { year month day }
+          endDate { year month day }
           nextAiringEpisode { airingAt episode }
         }
       }

@@ -52,6 +52,14 @@ def _fmt_date_long(ts: int) -> str:
     return f'{_MONTHS[dt.month - 1]} {dt.day}, {dt.year}'
 
 
+def _fmt_end_date(end_date: dict) -> str:
+    """AniList endDate {year, month, day} → 'Mar 15, 2025', or '' if incomplete."""
+    y, mo, d = end_date.get('year'), end_date.get('month'), end_date.get('day')
+    if not (y and mo and d):
+        return ''
+    return f'{_MONTHS[mo - 1]} {d}, {y}'
+
+
 def _ts_to_date(ts: int) -> date:
     return datetime.fromtimestamp(ts).date()
 
@@ -182,28 +190,37 @@ def get_upcoming_episodes():
 
 def get_queue():
     """
-    Currently watching anime with no nextAiringEpisode (show finished airing).
-    Sorted by most recently updated first.
+    Anime queued to watch: either currently watching with no nextAiringEpisode
+    (show finished airing), or planning with no nextAiringEpisode (fully aired,
+    not yet started). Sorted by most recently updated first.
     Returns (list[{title, watched, total, last_updated}], error).
     """
-    data, err = get_current_anime()
-    entries = _entries(data)
+    current_data,  err1 = get_current_anime()
+    planning_data, err2 = get_planning_anime()
+    err = err1 or err2
 
     items = []
-    for e in entries:
+    for e in _entries(current_data) + _entries(planning_data):
         m = e['media']
         if m.get('nextAiringEpisode'):
-            continue  # still airing → upcoming episodes
+            continue  # still airing → upcoming releases/episodes
+
+        total_eps  = m.get('episodes') or 0
+        if total_eps == 0:
+            continue  # no episodes data yet — skip
 
         progress   = e.get('progress') or 0
-        total_eps  = m.get('episodes') or 0
         updated_at = e.get('updatedAt') or 0
+        if updated_at:
+            last_updated = _fmt_date_long(updated_at)
+        else:
+            last_updated = _fmt_end_date(m.get('endDate') or {}) or '—'
 
         items.append({
             'title':        _title(m),
             'watched':      progress,
             'total':        total_eps if total_eps else progress,
-            'last_updated': _fmt_date_long(updated_at) if updated_at else '—',
+            'last_updated': last_updated,
             '_sort':        updated_at,
         })
 
@@ -234,10 +251,11 @@ def get_manga_updates():
         total_ch   = int(latest) if latest is not None else max(current_ch, 1)
         new_chs    = max(0, total_ch - current_ch) if latest is not None else 0
 
+        if not m['has_unread'] and latest is not None:
+            continue  # no new chapters — hide from dashboard
+
         if latest is None:
             status = 'Ongoing'
-        elif not m['has_unread']:
-            status = 'Up to date'
         else:
             status = f'+{new_chs} new'
 
