@@ -64,10 +64,12 @@ e-ink-dash/
 │   ├── stats_footer.py          # Bottom stats bar with gradient flanks
 │   └── pixel_art/
 │       └── starfield.py         # Static starfield scene (moon, stars, shooting star)
-├── api/                         # API integrations (AniList GraphQL, MangaDex REST)
+├── api/
+│   └── anilist.py               # AniList GraphQL client, SQLite cache, (data, error) returns
 ├── assets/
 │   ├── arts/                    # Local anime art images (.jpg, .png) for screen3
 │   └── icons/                   # SVG icons (bell, stars, arrows, refresh)
+├── .env.example                 # Template for ANILIST_ACCESS_TOKEN, ANILIST_USER_ID
 ├── cache/                       # SQLite cache for API responses (gitignored)
 ├── utils/
 │   ├── time.py                  # get_now() — timezone-aware, supports MOCK_NOW / TIME_OFFSET
@@ -83,7 +85,8 @@ e-ink-dash/
     ├── test_art_panel.py        # Art panel on hardware
     ├── test_starfield.py        # Starfield on hardware
     ├── test_screen3.py          # Single art display on hardware
-    └── test_screen3_slideshow.py# Slideshow loop on hardware
+    ├── test_screen3_slideshow.py# Slideshow loop on hardware
+    └── test_anilist.py          # Smoke test for AniList API (all methods)
 ```
 
 ## Screens
@@ -91,7 +94,7 @@ e-ink-dash/
 | # | Content | Status |
 |---|---------|--------|
 | 1 | Clock · calendar · year progress · pixel art | Done |
-| 2 | AniList upcoming releases · manga updates · queue | UI done, API TODO |
+| 2 | AniList upcoming releases · manga updates · queue | UI done, API client done, integration TODO |
 | 3 | Full-screen anime art slideshow (local images) | Done |
 
 Screens are switched via two buttons (next / prev, infinite loop).
