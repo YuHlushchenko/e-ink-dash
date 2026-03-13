@@ -89,7 +89,8 @@ e-ink-dash/
 │   └── drawing.py               # draw_gradient_bar() — shared utility
 └── tests/
     ├── test_screen1_preview.py  # Render screen1 on hardware
-    ├── test_screen2_preview.py  # Render screen2 on hardware
+    ├── test_screen2_preview.py  # Render screen2 on hardware (live cache data)
+    ├── test_screen2_screenshots.py # Screen 2 PNG tests: 9 cases with mocked data (no hardware)
     ├── test_dates.py            # 13 edge-case dates → PNG files in tests/output/
     ├── test_midnight.py         # Live scheduler test, time offset to 23:57
     ├── test_clock.py            # Clock component on hardware
