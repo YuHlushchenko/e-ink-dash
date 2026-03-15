@@ -116,6 +116,9 @@ def get_upcoming_releases():
         total_eps     = m.get('episodes')
         next_ep       = nae['episode']
 
+        if next_ep != 1:
+            continue  # ep 1 already aired → show belongs in upcoming episodes
+
         if total_eps and next_ep:
             final_ep = _fmt_date_short(airing_at + (total_eps - next_ep) * 7 * 86400)
         else:
@@ -136,13 +139,22 @@ def get_upcoming_releases():
 
 def get_upcoming_episodes():
     """
-    Currently watching anime that still have upcoming episodes.
+    Currently watching anime that still have upcoming episodes, plus planning
+    anime where ep 1 has already aired (show started but user hasn't begun).
     Sorted by next airing date ascending.
     Returns (list[{title, ep_label, time_until, final_date, watched, total,
                    behind, highlight, airing_date}], error).
     """
-    data, err = get_current_anime()
-    entries = _entries(data)
+    current_data,  err1 = get_current_anime()
+    planning_data, err2 = get_planning_anime()
+    err = err1 or err2
+
+    # planning entries with ep > 1 (already started airing, user hasn't begun)
+    planning_started = [
+        e for e in _entries(planning_data)
+        if (e['media'].get('nextAiringEpisode') or {}).get('episode', 1) > 1
+    ]
+    entries = _entries(current_data) + planning_started
     now = int(time.time())
 
     items = []

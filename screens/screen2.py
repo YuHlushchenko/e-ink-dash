@@ -153,9 +153,10 @@ class Screen2(BaseScreen):
         elif not queue:
             y3 = _draw_empty(draw_ctx, COL3_X, y3) + GAP_AFTER_CARD
         else:
+            MAX_QUEUE = 2
             shown = 0
             for item in queue:
-                if not _fits(y3):
+                if shown >= MAX_QUEUE or not _fits(y3):
                     break
                 y3 = draw_queue_card(
                     image, COL3_X, y3, COL_W,
