@@ -136,6 +136,15 @@ e-ink-dash/
 
 Screens are switched via two buttons (next / prev, infinite loop).
 
+### Screen 2 — Column Routing Rules
+
+| Column | Shows |
+|--------|-------|
+| Upcoming Releases | Planning anime where **ep 1 has not yet aired** (`nextAiringEpisode.episode == 1`) |
+| Upcoming Episodes | Currently watching anime still airing + planning anime where **ep 1 has already aired** (`episode > 1`) |
+| In Queue | Current/planning anime with **no** `nextAiringEpisode` (fully aired, not finished); max 2 cards |
+| Manga Updates | MangaDex reading list with unread chapters; max 2 cards |
+
 ## Update Strategy
 
 **Screen 1 (Clock)**
