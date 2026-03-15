@@ -9,6 +9,7 @@ Public functions — all return (list_or_dict, error_or_None):
   get_stats()             -> dict         footer stats
 """
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 import api.mangadex as mangadex
@@ -346,6 +347,17 @@ def has_aired() -> bool:
             if 0 < at <= now:
                 return True
     return False
+
+
+def prefetch_all():
+    """Fetch all three independent data sources in parallel to warm the cache."""
+    fns = [get_current_anime, get_planning_anime, mangadex.get_reading_list]
+    with ThreadPoolExecutor(max_workers=len(fns)) as ex:
+        for future in [ex.submit(fn) for fn in fns]:
+            try:
+                future.result()
+            except Exception:
+                pass
 
 
 def invalidate_cache():

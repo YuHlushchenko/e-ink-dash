@@ -112,6 +112,7 @@ def main():
             renderer.init_partial()
         elif idx == 1:
             data_layer.invalidate_cache()
+            data_layer.prefetch_all()
             s2_full_refresh()
         else:   # idx == 2
             screen3.pick_random()
@@ -154,6 +155,7 @@ def main():
             if data_layer.has_aired():
                 # Episode aired since last cache — get fresh data immediately
                 data_layer.invalidate_cache()
+                data_layer.prefetch_all()
                 s2_full_refresh()
             elif data_layer.has_imminent():
                 # At least one timer < 24h — keep minutes up-to-date
@@ -161,6 +163,7 @@ def main():
             elif time.time() - last_s2_full >= S2_REFRESH_INTERVAL:
                 # Hourly refresh — pull fresh API data
                 data_layer.invalidate_cache()
+                data_layer.prefetch_all()
                 s2_full_refresh()
 
         elif current_screen == 2:
