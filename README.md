@@ -7,6 +7,17 @@ Personal dashboard for a 7.5" e-ink display, running on Raspberry Pi Zero 2W.
 - Raspberry Pi Zero 2W
 - Waveshare 7.5" e-Paper HAT (800x480, B&W), Driver HAT Rev2.3
 - Driver HAT switches: Display Config B, Interface Config 0 (4-line SPI)
+- 2× tactile push buttons (next / prev screen)
+
+### Button Wiring
+
+| Button | Pi Pin | Pi GPIO |
+|--------|--------|---------|
+| Next   | Board 29 | GPIO 5 |
+| Prev   | Board 31 | GPIO 6 |
+| GND (shared) | Board 30 | GND |
+
+Each button connects between its GPIO pin and GND. No external pull-up resistor needed — gpiozero enables the internal pull-up automatically (`pull_up=True` by default).
 
 ## Setup
 
@@ -29,6 +40,26 @@ sudo apt install libcairo2 fonts-dejavu-core
 **Font:** DejaVu Sans — `/usr/share/fonts/truetype/dejavu/`
 Regular (`DejaVuSans.ttf`) + Bold (`DejaVuSans-Bold.ttf`). No Medium weight — Bold is aliased.
 
+**Autostart (systemd):**
+
+```bash
+# 1. Copy the example and fill in your username
+cp einkdash.service.example einkdash.service
+# Edit einkdash.service — replace all <your-username> with your Pi username
+
+# 2. Install and enable
+sudo cp einkdash.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable einkdash
+sudo systemctl start einkdash
+
+# Check status / logs
+sudo systemctl status einkdash
+journalctl -u einkdash -f
+```
+
+> `einkdash.service` is gitignored (contains local paths). `einkdash.service.example` is the template.
+
 ## Stack
 
 - Python + Pillow — rendering, Floyd-Steinberg dithering (grayscale → 1-bit for display)
@@ -48,7 +79,7 @@ e-ink-dash/
 ├── screens/
 │   ├── base_screen.py
 │   ├── screen1.py               # Clock + calendar + year progress + pixel art (done)
-│   ├── screen2.py               # AniList + MangaDex (UI done, API TODO)
+│   ├── screen2.py               # AniList + MangaDex dashboard (done)
 │   └── screen3.py               # Full-screen anime art slideshow (done)
 ├── components/
 │   ├── clock.py                 # Time, am/pm, countdown bullets
@@ -78,7 +109,8 @@ e-ink-dash/
 │   └── drawing.py               # draw_gradient_bar() — shared utility
 └── tests/
     ├── test_screen1_preview.py  # Render screen1 on hardware
-    ├── test_screen2_preview.py  # Render screen2 on hardware
+    ├── test_screen2_preview.py  # Render screen2 on hardware (live cache data)
+    ├── test_screen2_screenshots.py # Screen 2 PNG tests: 9 cases with mocked data (no hardware)
     ├── test_dates.py            # 13 edge-case dates → PNG files in tests/output/
     ├── test_midnight.py         # Live scheduler test, time offset to 23:57
     ├── test_clock.py            # Clock component on hardware
@@ -88,6 +120,8 @@ e-ink-dash/
     ├── test_starfield.py        # Starfield on hardware
     ├── test_screen3.py          # Single art display on hardware
     ├── test_screen3_slideshow.py# Slideshow loop on hardware
+    ├── test_buttons.py          # GPIO button smoke test (prints on press)
+    ├── test_screen3_preview.py  # Screen 3 PNG tests: render, empty fallback, no-repeat
     ├── test_anilist.py          # Smoke test for AniList API (all methods)
     └── test_mangadex.py         # Smoke test for MangaDex API
 ```
@@ -102,12 +136,33 @@ e-ink-dash/
 
 Screens are switched via two buttons (next / prev, infinite loop).
 
-## Update Strategy (Screen 1)
+### Screen 2 — Column Routing Rules
 
-- **Every minute** — partial refresh of clock region only (fast, ~0.3s)
+| Column | Shows |
+|--------|-------|
+| Upcoming Releases | Planning anime where **ep 1 has not yet aired** (`nextAiringEpisode.episode == 1`) |
+| Upcoming Episodes | Currently watching anime still airing + planning anime where **ep 1 has already aired** (`episode > 1`) |
+| In Queue | Current/planning anime with **no** `nextAiringEpisode` (fully aired, not finished); max 2 cards |
+| Manga Updates | MangaDex reading list with unread chapters; max 2 cards |
+
+## Update Strategy
+
+**Screen 1 (Clock)**
+- **Every minute** — partial refresh of clock region only (~0.3s)
 - **Every 5 minutes** — full refresh to clear ghosting (~3–5s)
 - **At midnight** — forced full refresh so calendar and year progress update immediately
 - **On startup** — full refresh
+
+**Screen 2 (AniList / MangaDex)**
+- **On switch** — API cache invalidated, full refresh with fresh data
+- **Any timer < 24h** — partial refresh of Col1 + Col2 every minute; full refresh every 5 partials (anti-ghosting)
+- **All timers ≥ 1 day** — full refresh every hour + cache invalidation
+- **Timer hits 0** — cache invalidated, full refresh immediately so next episode data loads
+
+**Screen 3 (Art slideshow)**
+- **Auto-slideshow** — new random art every `SLIDESHOW_INTERVAL` seconds (set in `config.py`)
+- **On manual switch** — immediate new random art regardless of interval
+- Never shows the same art twice in a row
 
 ## API Credentials (AniList)
 

@@ -41,6 +41,14 @@ CASES = [
     ('leap_year_last_day',              datetime(2028, 12, 31, 23, 59)),  # leap year end
     ('midnight_transition',             datetime(2026,  3, 10, 23, 59)),  # 1 min before midnight
     ('long_weekend_bullet',             datetime(2026,  3,  9,  9,  0)),  # Mon 09:00 — "Weekend in 5d Xh"
+    # Weekend work bullet edge cases
+    ('friday_during_work',              datetime(2026,  3, 13, 15,  0)),  # Fri 15:00 — "Work ends in 4h 0m"
+    ('friday_after_work',               datetime(2026,  3, 13, 20,  0)),  # Fri 20:00 — "Work starts in 2d Xh" (Mon)
+    ('saturday_midday',                 datetime(2026,  3, 14, 12,  0)),  # Sat 12:00 — "Work starts in 1d Xh" (Mon)
+    ('sunday_morning',                  datetime(2026,  3, 15,  9,  0)),  # Sun 09:00 — "Work starts in Xh Ym" (Mon)
+    ('sunday_evening',                  datetime(2026,  3, 15, 22,  0)),  # Sun 22:00 — "Work starts in 12h 0m"
+    ('monday_before_work',              datetime(2026,  3, 16,  9, 30)),  # Mon 09:30 — "Work starts in 0h 30m"
+    ('thursday_after_work',             datetime(2026,  3, 12, 21,  0)),  # Thu 21:00 — "Work starts in Xh Ym" (Fri)
 ]
 
 for label, dt in CASES:

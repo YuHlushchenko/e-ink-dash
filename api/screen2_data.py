@@ -9,6 +9,7 @@ Public functions — all return (list_or_dict, error_or_None):
   get_stats()             -> dict         footer stats
 """
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 import api.mangadex as mangadex
@@ -17,6 +18,7 @@ from api.anilist import (
     get_planning_anime,
     get_user_stats,
     get_completed_anime,
+    invalidate_cache as _anilist_invalidate,
 )
 
 
@@ -49,6 +51,14 @@ def _fmt_date_long(ts: int) -> str:
     """Unix timestamp → 'Mar 15, 2025' (locale-independent)."""
     dt = datetime.fromtimestamp(ts)
     return f'{_MONTHS[dt.month - 1]} {dt.day}, {dt.year}'
+
+
+def _fmt_end_date(end_date: dict) -> str:
+    """AniList endDate {year, month, day} → 'Mar 15, 2025', or '' if incomplete."""
+    y, mo, d = end_date.get('year'), end_date.get('month'), end_date.get('day')
+    if not (y and mo and d):
+        return ''
+    return f'{_MONTHS[mo - 1]} {d}, {y}'
 
 
 def _ts_to_date(ts: int) -> date:
@@ -107,6 +117,9 @@ def get_upcoming_releases():
         total_eps     = m.get('episodes')
         next_ep       = nae['episode']
 
+        if next_ep != 1:
+            continue  # ep 1 already aired → show belongs in upcoming episodes
+
         if total_eps and next_ep:
             final_ep = _fmt_date_short(airing_at + (total_eps - next_ep) * 7 * 86400)
         else:
@@ -118,6 +131,7 @@ def get_upcoming_releases():
             'starts_in':   _fmt_duration(seconds_until),
             'final_ep':    final_ep,
             'airing_date': _ts_to_date(airing_at),
+            'airing_at':   airing_at,
         })
 
     items.sort(key=lambda x: x['airing_date'])
@@ -126,13 +140,22 @@ def get_upcoming_releases():
 
 def get_upcoming_episodes():
     """
-    Currently watching anime that still have upcoming episodes.
+    Currently watching anime that still have upcoming episodes, plus planning
+    anime where ep 1 has already aired (show started but user hasn't begun).
     Sorted by next airing date ascending.
     Returns (list[{title, ep_label, time_until, final_date, watched, total,
                    behind, highlight, airing_date}], error).
     """
-    data, err = get_current_anime()
-    entries = _entries(data)
+    current_data,  err1 = get_current_anime()
+    planning_data, err2 = get_planning_anime()
+    err = err1 or err2
+
+    # planning entries with ep > 1 (already started airing, user hasn't begun)
+    planning_started = [
+        e for e in _entries(planning_data)
+        if (e['media'].get('nextAiringEpisode') or {}).get('episode', 1) > 1
+    ]
+    entries = _entries(current_data) + planning_started
     now = int(time.time())
 
     items = []
@@ -171,6 +194,7 @@ def get_upcoming_episodes():
             'behind':      behind,
             'highlight':   is_final,
             'airing_date': _ts_to_date(airing_at),
+            'airing_at':   airing_at,
         })
 
     items.sort(key=lambda x: x['airing_date'])
@@ -179,28 +203,37 @@ def get_upcoming_episodes():
 
 def get_queue():
     """
-    Currently watching anime with no nextAiringEpisode (show finished airing).
-    Sorted by most recently updated first.
+    Anime queued to watch: either currently watching with no nextAiringEpisode
+    (show finished airing), or planning with no nextAiringEpisode (fully aired,
+    not yet started). Sorted by most recently updated first.
     Returns (list[{title, watched, total, last_updated}], error).
     """
-    data, err = get_current_anime()
-    entries = _entries(data)
+    current_data,  err1 = get_current_anime()
+    planning_data, err2 = get_planning_anime()
+    err = err1 or err2
 
     items = []
-    for e in entries:
+    for e in _entries(current_data) + _entries(planning_data):
         m = e['media']
         if m.get('nextAiringEpisode'):
-            continue  # still airing → upcoming episodes
+            continue  # still airing → upcoming releases/episodes
+
+        total_eps  = m.get('episodes') or 0
+        if total_eps == 0:
+            continue  # no episodes data yet — skip
 
         progress   = e.get('progress') or 0
-        total_eps  = m.get('episodes') or 0
         updated_at = e.get('updatedAt') or 0
+        if updated_at:
+            last_updated = _fmt_date_long(updated_at)
+        else:
+            last_updated = _fmt_end_date(m.get('endDate') or {}) or '—'
 
         items.append({
             'title':        _title(m),
             'watched':      progress,
             'total':        total_eps if total_eps else progress,
-            'last_updated': _fmt_date_long(updated_at) if updated_at else '—',
+            'last_updated': last_updated,
             '_sort':        updated_at,
         })
 
@@ -231,10 +264,11 @@ def get_manga_updates():
         total_ch   = int(latest) if latest is not None else max(current_ch, 1)
         new_chs    = max(0, total_ch - current_ch) if latest is not None else 0
 
+        if not m['has_unread'] and latest is not None:
+            continue  # no new chapters — hide from dashboard
+
         if latest is None:
             status = 'Ongoing'
-        elif not m['has_unread']:
-            status = 'Up to date'
         else:
             status = f'+{new_chs} new'
 
@@ -289,3 +323,44 @@ def get_stats():
         'total_hours':    minutes_this_year // 60,
         'manga_reading':  manga_reading,
     }, (errors[0] if errors else None)
+
+
+def has_imminent(threshold: int = 86400) -> bool:
+    """True if any upcoming release or episode airs within `threshold` seconds."""
+    now = int(time.time())
+    for get_fn in (get_upcoming_releases, get_upcoming_episodes):
+        items, _ = get_fn()
+        for item in (items or []):
+            at = item.get('airing_at', 0)
+            if 0 < at - now < threshold:
+                return True
+    return False
+
+
+def has_aired() -> bool:
+    """True if any cached upcoming item has already aired (cache is stale)."""
+    now = int(time.time())
+    for get_fn in (get_upcoming_releases, get_upcoming_episodes):
+        items, _ = get_fn()
+        for item in (items or []):
+            at = item.get('airing_at', 0)
+            if 0 < at <= now:
+                return True
+    return False
+
+
+def prefetch_all():
+    """Fetch all three independent data sources in parallel to warm the cache."""
+    fns = [get_current_anime, get_planning_anime, mangadex.get_reading_list]
+    with ThreadPoolExecutor(max_workers=len(fns)) as ex:
+        for future in [ex.submit(fn) for fn in fns]:
+            try:
+                future.result()
+            except Exception:
+                pass
+
+
+def invalidate_cache():
+    """Force fresh API data on next Screen 2 render."""
+    _anilist_invalidate()
+    mangadex.invalidate_cache()

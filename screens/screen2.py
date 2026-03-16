@@ -55,11 +55,29 @@ def _draw_more(draw_ctx, x, y, remaining):
 
 
 def _draw_empty(draw_ctx, x, y, message='No updates'):
-    draw_ctx.text(
-        (x + COL_W // 2, y + 2),
-        message,
-        font=_font(config.FONT_BOLD_PATH, 15), fill=0, anchor='mt',
-    )
+    font = _font(config.FONT_BOLD_PATH, 15)
+
+    # Word-wrap into lines that fit COL_W
+    words = message.split()
+    lines, current = [], ''
+    for word in words:
+        candidate = (current + ' ' + word).strip()
+        if draw_ctx.textlength(candidate, font=font) <= COL_W - 8:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+
+    line_h = draw_ctx.textbbox((0, 0), 'A', font=font)[3] + 4
+    cx = x + COL_W // 2
+    ty = y + 2
+    for line in lines:
+        draw_ctx.text((cx, ty), line, font=font, fill=0, anchor='mt')
+        ty += line_h
+    return ty  # bottom of last line
 
 
 class Screen2(BaseScreen):
@@ -78,7 +96,7 @@ class Screen2(BaseScreen):
         y1 = draw_header(image, COL1_X, y1, COL_W, 'Upcoming Releases') + GAP_AFTER_HEADER
 
         if err_rel and not releases:
-            _draw_empty(draw_ctx, COL1_X, y1, f'Error: {err_rel[:30]}')
+            _draw_empty(draw_ctx, COL1_X, y1, f'Error: {err_rel}')
         elif not releases:
             _draw_empty(draw_ctx, COL1_X, y1)
         else:
@@ -102,7 +120,7 @@ class Screen2(BaseScreen):
         y2 = draw_header(image, COL2_X, PAD, COL_W, 'Upcoming Episodes') + GAP_AFTER_HEADER
 
         if err_ep and not episodes:
-            _draw_empty(draw_ctx, COL2_X, y2, f'Error: {err_ep[:30]}')
+            _draw_empty(draw_ctx, COL2_X, y2, f'Error: {err_ep}')
         elif not episodes:
             _draw_empty(draw_ctx, COL2_X, y2)
         else:
@@ -131,15 +149,14 @@ class Screen2(BaseScreen):
         y3 = draw_header(image, COL3_X, PAD, COL_W, 'In Queue') + GAP_AFTER_HEADER
 
         if err_q and not queue:
-            _draw_empty(draw_ctx, COL3_X, y3, f'Error: {err_q[:30]}')
-            y3 += _MORE_H_EST
+            y3 = _draw_empty(draw_ctx, COL3_X, y3, f'Error: {err_q}') + GAP_AFTER_CARD
         elif not queue:
-            _draw_empty(draw_ctx, COL3_X, y3)
-            y3 += _MORE_H_EST
+            y3 = _draw_empty(draw_ctx, COL3_X, y3) + GAP_AFTER_CARD
         else:
+            MAX_QUEUE = 2
             shown = 0
             for item in queue:
-                if not _fits(y3):
+                if shown >= MAX_QUEUE or not _fits(y3):
                     break
                 y3 = draw_queue_card(
                     image, COL3_X, y3, COL_W,
@@ -158,7 +175,7 @@ class Screen2(BaseScreen):
             y3 = draw_header(image, COL3_X, y3, COL_W, 'Manga Updates') + GAP_AFTER_HEADER
 
             if err_mg and not manga:
-                _draw_empty(draw_ctx, COL3_X, y3, f'Error: {err_mg[:30]}')
+                _draw_empty(draw_ctx, COL3_X, y3, f'Error: {err_mg}')
             elif not manga:
                 _draw_empty(draw_ctx, COL3_X, y3)
             else:

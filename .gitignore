@@ -1,4 +1,5 @@
 CLAUDE.md
+*.service
 .Trash-*/
 __pycache__/
 *.pyc
