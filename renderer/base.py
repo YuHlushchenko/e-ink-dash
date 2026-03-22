@@ -17,9 +17,33 @@ class Renderer:
         self.epd.init_part()
 
     def display(self, image: Image.Image):
-        """Full screen refresh (slow, no ghosting)."""
-        buf = self.epd.getbuffer(image.convert('1', dither=Image.FLOYDSTEINBERG))
-        self.epd.display(buf)
+        """Fast full-screen refresh via display_Partial — saturated blacks, ~2-3s.
+        No Clear(): init_part() hardware reset leaves frame buffer undefined, so
+        display_Partial treats all pixels as changed and drives them all.
+        Use for regular anti-ghosting cycles (every 5 min). Not a true full waveform
+        cycle — call display_maintenance() at least once daily to prevent burn-in.
+        """
+        self.epd.init_part()
+        raw = image.convert('1', dither=Image.FLOYDSTEINBERG).tobytes('raw')
+        buf = list(bytes(b ^ 0xFF for b in raw))
+        self.epd.display_Partial(buf, 0, 0, self.epd.width, self.epd.height)
+
+    def display_maintenance(self, image: Image.Image):
+        """Full-health refresh — required every 5 partial refreshes to prevent burn-in.
+        Pass 1: true epd.display() cycles all pixels through complete waveform,
+                physically resetting microcapsule voltages (DC bias reset).
+        Pass 2: display_Partial for saturated blacks (no second Clear() needed —
+                frame buffer after display() is valid, init_part() reset drives all pixels).
+        Takes ~5-7s.
+        """
+        buf_full = self.epd.getbuffer(image.convert('1', dither=Image.FLOYDSTEINBERG))
+        self.epd.init()
+        self.epd.display(buf_full)
+        self.epd.init_part()
+        self.epd.Clear()
+        raw = image.convert('1', dither=Image.FLOYDSTEINBERG).tobytes('raw')
+        buf_partial = list(bytes(b ^ 0xFF for b in raw))
+        self.epd.display_Partial(buf_partial, 0, 0, self.epd.width, self.epd.height)
 
     def display_partial(self, image: Image.Image, x0: int, y0: int, x1: int, y1: int):
         """
