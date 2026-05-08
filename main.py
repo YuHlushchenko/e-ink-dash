@@ -43,8 +43,10 @@ S2_COL2 = (272, 46, 528, 442)
 # Col1: upcoming releases timers (after notif bar + header at y=74, before footer)
 S2_COL1 = (0, 80, 272, 442)
 
-# Full refresh every N partial refreshes to clear ghosting
-GHOST_CLEAR_AFTER = 5
+# Full refresh every N partial refreshes to clear ghosting.
+# Real-world projects use 30-60 partials between full refreshes (Byron Knoll, mendhak).
+# 60 = full refresh every hour (1 partial/min × 60 min).
+GHOST_CLEAR_AFTER = 60
 
 # Screen 2 hourly full refresh interval (seconds)
 S2_REFRESH_INTERVAL = 3600
@@ -59,36 +61,42 @@ def main():
     screen2 = Screen2(renderer)
     screen3 = Screen3(renderer)
 
-    current_screen   = 0
-    s1_partial_count = 0
-    s2_partial_count = 0
-    last_s2_full     = 0.0   # epoch time of last Screen 2 full refresh
-    s3_tick          = 0     # loop iterations since last Screen 3 art change
+    current_screen      = 0
+    s1_partial_count    = 0
+    s2_partial_count    = 0
+    last_s2_full        = 0.0   # epoch time of last Screen 2 full refresh
+    s3_tick             = 0     # loop iterations since last Screen 3 art change
+    last_maintenance    = None  # date of last display_maintenance() call
 
     # ── Screen 1 helpers ────────────────────────────────────────────────────
 
-    def s1_full_refresh(dt=None):
+    def _show(image, maintenance=False):
+        """Display full screen — maintenance mode once daily for display longevity."""
+        if maintenance:
+            renderer.display_maintenance(image)
+        else:
+            renderer.display(image)
+
+    def s1_full_refresh(dt=None, maintenance=False):
         nonlocal s1_partial_count
         if dt is None:
             dt = get_now()
-        renderer.init()
-        renderer.display(screen1.render(dt))
+        _show(screen1.render(dt), maintenance)
         s1_partial_count = 0
 
     # ── Screen 2 helpers ────────────────────────────────────────────────────
 
-    def s2_full_refresh():
+    def s2_full_refresh(maintenance=False):
         nonlocal s2_partial_count, last_s2_full
-        renderer.init()
-        renderer.display(screen2.render())
+        _show(screen2.render(), maintenance)
         s2_partial_count = 0
         last_s2_full = time.time()
 
     def s2_partial_refresh():
         nonlocal s2_partial_count
-        # Ghost-clear: after N partials do a full refresh, resume next minute
+        # Ghost-clear: after N partials do a true full refresh, resume next minute
         if s2_partial_count >= GHOST_CLEAR_AFTER:
-            s2_full_refresh()
+            s2_full_refresh(maintenance=True)
             return
         # First partial after a full refresh: switch hardware to partial mode
         if s2_partial_count == 0:
@@ -100,9 +108,8 @@ def main():
 
     # ── Screen switching ─────────────────────────────────────────────────────
 
-    def s3_show():
-        renderer.init()
-        renderer.display(screen3.render())
+    def s3_show(maintenance=False):
+        _show(screen3.render(), maintenance)
 
     def switch_to(idx):
         nonlocal current_screen, s3_tick
@@ -126,9 +133,11 @@ def main():
 
     # ── Initial render ───────────────────────────────────────────────────────
 
-    s1_full_refresh()
+    now = get_now()
+    last_date        = now.date()
+    last_maintenance = now.date()
+    s1_full_refresh(maintenance=True)   # startup counts as daily maintenance
     renderer.init_partial()
-    last_date = get_now().date()
 
     # ── Scheduler loop — wakes on each minute boundary ───────────────────────
 
@@ -137,14 +146,22 @@ def main():
         secs_to_next = 60 - now.second - now.microsecond / 1_000_000
         time.sleep(max(0.5, secs_to_next))
 
+        today = get_now().date()
+        do_maintenance = last_maintenance != today
+
         if current_screen == 0:
             dt = get_now()
             if dt.date() != last_date:
                 last_date = dt.date()
-                s1_full_refresh(dt)
+                s1_full_refresh(dt, maintenance=True)
+                last_maintenance = today
+                renderer.init_partial()
+            elif do_maintenance:
+                s1_full_refresh(dt, maintenance=True)
+                last_maintenance = today
                 renderer.init_partial()
             elif s1_partial_count >= GHOST_CLEAR_AFTER:
-                s1_full_refresh(dt)
+                s1_full_refresh(dt, maintenance=True)  # true full refresh every 5 partials
                 renderer.init_partial()
             else:
                 img = screen1.render(dt)
@@ -156,22 +173,32 @@ def main():
                 # Episode aired since last cache — get fresh data immediately
                 data_layer.invalidate_cache()
                 data_layer.prefetch_all()
-                s2_full_refresh()
+                s2_full_refresh(maintenance=do_maintenance)
+                if do_maintenance:
+                    last_maintenance = today
             elif data_layer.has_imminent():
                 # At least one timer < 24h — keep minutes up-to-date
-                s2_partial_refresh()
+                if do_maintenance:
+                    s2_full_refresh(maintenance=True)
+                    last_maintenance = today
+                else:
+                    s2_partial_refresh()
             elif time.time() - last_s2_full >= S2_REFRESH_INTERVAL:
                 # Hourly refresh — pull fresh API data
                 data_layer.invalidate_cache()
                 data_layer.prefetch_all()
-                s2_full_refresh()
+                s2_full_refresh(maintenance=do_maintenance)
+                if do_maintenance:
+                    last_maintenance = today
 
         elif current_screen == 2:
             s3_tick += 1
             if s3_tick >= max(1, SLIDESHOW_INTERVAL // 60):
                 s3_tick = 0
                 screen3.pick_random()
-                s3_show()
+                s3_show(maintenance=do_maintenance)
+                if do_maintenance:
+                    last_maintenance = today
 
 
 if __name__ == '__main__':

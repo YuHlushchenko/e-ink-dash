@@ -147,22 +147,29 @@ Screens are switched via two buttons (next / prev, infinite loop).
 
 ## Update Strategy
 
+Two full-screen refresh modes in `renderer/base.py`:
+
+- **`display()`** (~2–3s) — full-screen via partial waveform. Fast, no white flash. Used for screen switches and routine full-screen updates.
+- **`display_maintenance()`** (~7–10s) — two-pass health refresh. Pass 1: true full waveform cycle (resets pixel voltages). Pass 2: partial waveform for saturated blacks. Required periodically to prevent ghosting accumulation.
+
 **Screen 1 (Clock)**
 - **Every minute** — partial refresh of clock region only (~0.3s)
-- **Every 5 minutes** — full refresh to clear ghosting (~3–5s)
-- **At midnight** — forced full refresh so calendar and year progress update immediately
-- **On startup** — full refresh
+- **Every 60 minutes** — `display_maintenance()` to clear ghosting (~7–10s)
+- **At midnight** — forced `display_maintenance()` so calendar and year progress update immediately
+- **On startup** — `display_maintenance()`
 
 **Screen 2 (AniList / MangaDex)**
-- **On switch** — API cache invalidated, full refresh with fresh data
-- **Any timer < 24h** — partial refresh of Col1 + Col2 every minute; full refresh every 5 partials (anti-ghosting)
-- **All timers ≥ 1 day** — full refresh every hour + cache invalidation
-- **Timer hits 0** — cache invalidated, full refresh immediately so next episode data loads
+- **On switch** — API cache invalidated, fast `display()`
+- **Any timer < 24h** — partial refresh of Col1 + Col2 every minute; `display_maintenance()` every 60 partials
+- **All timers ≥ 1 day** — `display_maintenance()` once daily + `display()` hourly + cache invalidation
+- **Timer hits 0** — cache invalidated, `display_maintenance()` immediately
 
 **Screen 3 (Art slideshow)**
 - **Auto-slideshow** — new random art every `SLIDESHOW_INTERVAL` seconds (set in `config.py`)
-- **On manual switch** — immediate new random art regardless of interval
+- **On manual switch** — immediate new random art, fast `display()`
 - Never shows the same art twice in a row
+
+**Screen switching (buttons)** — always fast `display()`, ~2–3s
 
 ## API Credentials (AniList)
 
