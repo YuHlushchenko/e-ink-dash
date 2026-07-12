@@ -7,7 +7,9 @@ Screen 1 update strategy:
   • At midnight    : forced full refresh (calendar + year_progress update immediately).
 
 Screen 2 update strategy:
-  • On switch      : invalidate API cache + full refresh (always fresh data).
+  • On switch      : show animated "Loading..." screen (screens/loading_screen.py)
+                      while cache invalidation + prefetch run on a background thread,
+                      then full refresh with fresh data (_show_loading_while()).
   • Any timer < 24h: partial refresh Col1+Col2 every minute; full every 5 partials (anti-ghosting).
   • All timers ≥ 1d: full refresh every hour + cache invalidation.
   • Timer hits 0   : detect via has_aired() → invalidate cache + full refresh immediately.
@@ -22,17 +24,26 @@ Clock partial-refresh region (x must be multiple of 8):
 Screen 2 partial-refresh regions (x must be multiple of 8):
   Col2 (upcoming episodes): x0=272, x1=528, y0=46, y1=442
   Col1 (upcoming releases): x0=0,   x1=272, y0=80, y1=442
+
+render_lock guards renderer/EPD access shared between the gpiozero button-callback
+thread (Screen 2's loading animation) and this function's scheduler loop
 """
 import time
 import signal
+import threading
+import itertools
 from gpiozero import Button
 from renderer.base import Renderer
 from screens.screen1 import Screen1
 from screens.screen2 import Screen2
 from screens.screen3 import Screen3
+from screens.loading_screen import LoadingScreen
 from utils.time import get_now
 import api.screen2_data as data_layer
 from config import BTN_NEXT_PIN, BTN_PREV_PIN, BTN_BOUNCE_TIME, SLIDESHOW_INTERVAL
+
+# Screen 2 loading animation — seconds between dot-frame updates
+DOT_INTERVAL = 0.8
 
 # Screen 1 — clock partial-refresh region (8-pixel-aligned x)
 CLOCK_X0, CLOCK_Y0, CLOCK_X1, CLOCK_Y1 = 224, 8, 496, 272
@@ -60,6 +71,11 @@ def main():
     screen1 = Screen1(renderer)
     screen2 = Screen2(renderer)
     screen3 = Screen3(renderer)
+    loading = LoadingScreen(renderer)
+
+    # Guards renderer/EPD access shared between the gpiozero button-callback
+    # thread (Screen 2 loading animation) and this function's scheduler loop.
+    render_lock = threading.Lock()
 
     current_screen      = 0
     s1_partial_count    = 0
@@ -111,6 +127,28 @@ def main():
     def s3_show(maintenance=False):
         _show(screen3.render(), maintenance)
 
+    def _show_loading_while(work_fn, finish_fn):
+        """Show an animated 'Loading...' screen while work_fn() runs on a
+        background thread, then call finish_fn() to render the real content.
+        Reusable for any screen switch that needs to block on a network
+        fetch first — not tied to Screen 2 specifically."""
+        with render_lock:
+            _show(loading.render(0))   # full white "Loading" — confirms the press
+
+        thread = threading.Thread(target=work_fn)
+        thread.start()
+
+        region = loading.text_region()
+        dots = itertools.cycle([0, 1, 2, 3, 2, 1])
+        next(dots)   # skip the 0 already drawn above
+        while thread.is_alive():
+            with render_lock:
+                renderer.display_partial(loading.render(next(dots)), *region)
+            thread.join(timeout=DOT_INTERVAL)
+
+        with render_lock:
+            finish_fn()
+
     def switch_to(idx):
         nonlocal current_screen, s3_tick
         current_screen = idx
@@ -118,9 +156,11 @@ def main():
             s1_full_refresh()
             renderer.init_partial()
         elif idx == 1:
-            data_layer.invalidate_cache()
-            data_layer.prefetch_all()
-            s2_full_refresh()
+            def _prefetch():
+                data_layer.invalidate_cache()
+                data_layer.prefetch_all()
+
+            _show_loading_while(_prefetch, s2_full_refresh)
         else:   # idx == 2
             screen3.pick_random()
             s3_show()
@@ -173,21 +213,25 @@ def main():
                 # Episode aired since last cache — get fresh data immediately
                 data_layer.invalidate_cache()
                 data_layer.prefetch_all()
-                s2_full_refresh(maintenance=do_maintenance)
+                with render_lock:
+                    s2_full_refresh(maintenance=do_maintenance)
                 if do_maintenance:
                     last_maintenance = today
             elif data_layer.has_imminent():
                 # At least one timer < 24h — keep minutes up-to-date
                 if do_maintenance:
-                    s2_full_refresh(maintenance=True)
+                    with render_lock:
+                        s2_full_refresh(maintenance=True)
                     last_maintenance = today
                 else:
-                    s2_partial_refresh()
+                    with render_lock:
+                        s2_partial_refresh()
             elif time.time() - last_s2_full >= S2_REFRESH_INTERVAL:
                 # Hourly refresh — pull fresh API data
                 data_layer.invalidate_cache()
                 data_layer.prefetch_all()
-                s2_full_refresh(maintenance=do_maintenance)
+                with render_lock:
+                    s2_full_refresh(maintenance=do_maintenance)
                 if do_maintenance:
                     last_maintenance = today
 
