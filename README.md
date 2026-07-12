@@ -84,7 +84,7 @@ e-ink-dash/
 ├── components/
 │   ├── clock.py                 # Time, am/pm, countdown bullets
 │   ├── calendar.py              # Monthly grid, Sunday-first, today highlight
-│   ├── year_progress.py         # GitHub-style year grid + progress bar
+│   ├── github_contribution.py   # Real GitHub contribution grid + year progress bar
 │   ├── art_panel.py             # Notification bar (draw_notif_bar) + pixel art panel
 │   ├── section_header.py        # Reusable black rounded rect section header
 │   ├── date_separator.py        # Date label + horizontal rule
@@ -98,11 +98,12 @@ e-ink-dash/
 ├── api/
 │   ├── anilist.py               # AniList GraphQL client, SQLite cache, (data, error) returns
 │   ├── mangadex.py              # MangaDex REST client, OAuth2, SQLite cache, (data, error) returns
+│   ├── github.py                # GitHub GraphQL client, SQLite cache, push-based freshness (no TTL pull)
 │   └── screen2_data.py          # Transforms AniList + MangaDex responses into card-ready dicts
 ├── assets/
 │   ├── arts/                    # Local anime art images (.jpg, .png) for screen3
 │   └── icons/                   # SVG icons (bell, stars, arrows, refresh)
-├── .env.example                 # Template for AniList + MangaDex credentials
+├── .env.example                 # Template for AniList + MangaDex + GitHub credentials
 ├── cache/                       # SQLite cache for API responses (gitignored)
 ├── utils/
 │   ├── time.py                  # get_now() — timezone-aware, supports MOCK_NOW / TIME_OFFSET
@@ -115,7 +116,8 @@ e-ink-dash/
     ├── test_midnight.py         # Live scheduler test, time offset to 23:57
     ├── test_clock.py            # Clock component on hardware
     ├── test_calendar.py         # Calendar component on hardware
-    ├── test_year_progress.py    # Year progress on hardware
+    ├── test_github_contribution.py            # Contribution grid on hardware
+    ├── test_github_contribution_screenshots.py# PNG tests: typical/no-data/partial-gaps (no hardware)
     ├── test_art_panel.py        # Art panel on hardware
     ├── test_starfield.py        # Starfield on hardware
     ├── test_screen3.py          # Single art display on hardware
@@ -123,7 +125,8 @@ e-ink-dash/
     ├── test_buttons.py          # GPIO button smoke test (prints on press)
     ├── test_screen3_preview.py  # Screen 3 PNG tests: render, empty fallback, no-repeat
     ├── test_anilist.py          # Smoke test for AniList API (all methods)
-    └── test_mangadex.py         # Smoke test for MangaDex API
+    ├── test_mangadex.py         # Smoke test for MangaDex API
+    └── test_github.py           # Smoke test for GitHub contributions API
 ```
 
 ## Screens
@@ -155,8 +158,13 @@ Two full-screen refresh modes in `renderer/base.py`:
 **Screen 1 (Clock)**
 - **Every minute** — partial refresh of clock region only (~0.3s)
 - **Every 60 minutes** — `display_maintenance()` to clear ghosting (~7–10s)
-- **At midnight** — forced `display_maintenance()` so calendar and year progress update immediately
+- **At midnight** — forced `display_maintenance()` so calendar and github contributions grid update immediately
 - **On startup** — `display_maintenance()`
+- **GitHub contributions grid** — trailing 365 days ending today (GitHub's own default
+  contribution-graph framing, independent of the calendar-year stats row below it),
+  fetched on a background thread (nightly, hourly, and on switch-in to Screen 1), then
+  a partial refresh of just the grid region — never blocks the per-minute clock tick.
+  See `components/github_contribution.py` and `api/github.py`.
 
 **Screen 2 (AniList / MangaDex)**
 - **On switch** — API cache invalidated, fast `display()`
@@ -244,6 +252,32 @@ AniList is a free, open-source service. To avoid abuse/blocking:
 - All responses cached in `cache/mangadex.db` (SQLite), TTL 1 hour
 - Manga reading list: fetches status → batch titles → per-manga chapter feed + read markers
 - Screen 2 reads from cache — **no API call per screen update**
+
+## API Credentials (GitHub)
+
+### First-time setup
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token**
+   (classic, or a fine-grained token scoped to your account with read access to your profile).
+   Classic tokens need no extra scopes to read your own public contribution calendar.
+2. Add to `.env`:
+   ```
+   GITHUB_TOKEN=your_token
+   GITHUB_USERNAME=your_github_username
+   ```
+
+> **Token expiry:** depends on the expiration you pick when generating it (GitHub allows
+> 30/60/90 days, a custom date, or no expiration). Regenerate and update `.env` when it lapses.
+
+### API usage policy
+
+- Responses cached in `cache/github.db` (SQLite). Unlike AniList/MangaDex, this cache is
+  **push-based, not TTL-based**: `main.py` explicitly fetches on a schedule (nightly,
+  hourly, and on switch-in to Screen 1) via a background thread, and the render path
+  (`components/github_contribution.py`) only ever reads the cache — it never makes a
+  network call, so a slow/unreachable API can't stall the per-minute clock refresh.
+- Days with no confirmed data (never fetched yet, or every fetch attempt has failed)
+  render as white squares — no error text is shown on Screen 1.
 
 ## Dev Workflow
 

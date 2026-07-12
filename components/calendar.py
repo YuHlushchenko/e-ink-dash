@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import config
-import components.year_progress as _yp
+import components.github_contribution as _yp
 
 ICONS_DIR = Path(__file__).parent.parent / 'assets' / 'icons'
 

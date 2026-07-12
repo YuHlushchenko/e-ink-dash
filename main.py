@@ -4,7 +4,17 @@ e-ink dashboard — main entry point.
 Screen 1 update strategy:
   • Every minute   : partial refresh of clock region.
   • Every 5 min    : full refresh (clears ghosting).
-  • At midnight    : forced full refresh (calendar + year_progress update immediately).
+  • At midnight    : forced full refresh (calendar + github_contribution update immediately).
+
+Screen 1 GitHub contributions strategy:
+  • On startup, at midnight, and every GHOST_CLEAR_AFTER partials (~hourly): background
+    thread calls api.github.fetch_contributions(), then (if still on Screen 1) partial-
+    refreshes just the grid region — never blocks the per-minute clock tick.
+  • On switch to Screen 1: same background fetch, fired from switch_to(0).
+  • GITHUB_FETCH_MIN_INTERVAL dedupes near-simultaneous triggers (e.g. switching to
+    Screen 1 right after an hourly fetch just ran).
+  • render_lock now also guards Screen 1's render/display calls (previously Screen-2-only)
+    since this background thread is a second writer to the EPD for Screen 1.
 
 Screen 2 update strategy:
   • On switch      : show animated "Loading..." screen (screens/loading_screen.py)
@@ -26,7 +36,10 @@ Screen 2 partial-refresh regions (x must be multiple of 8):
   Col1 (upcoming releases): x0=0,   x1=272, y0=80, y1=442
 
 render_lock guards renderer/EPD access shared between the gpiozero button-callback
-thread (Screen 2's loading animation) and this function's scheduler loop
+thread (Screen 2's loading animation, Screen 1 switch-in), the GitHub background-fetch
+thread (Screen 1's contributions grid), and this function's scheduler loop. Screen 1 and
+Screen 2 are now both covered; Screen 3 render calls remain unlocked (accepted gap —
+Screen 3 has no background writer thread of its own).
 """
 import time
 import signal
@@ -40,6 +53,7 @@ from screens.screen3 import Screen3
 from screens.loading_screen import LoadingScreen
 from utils.time import get_now
 import api.screen2_data as data_layer
+import api.github as github_api
 from config import BTN_NEXT_PIN, BTN_PREV_PIN, BTN_BOUNCE_TIME, SLIDESHOW_INTERVAL
 
 # Screen 2 loading animation — seconds between dot-frame updates
@@ -47,6 +61,13 @@ DOT_INTERVAL = 0.8
 
 # Screen 1 — clock partial-refresh region (8-pixel-aligned x)
 CLOCK_X0, CLOCK_Y0, CLOCK_X1, CLOCK_Y1 = 224, 8, 496, 272
+
+# Screen 1 — GitHub contributions grid partial-refresh region (8-pixel-aligned x)
+S1_GITHUB_REGION = (0, 274, 800, 466)
+
+# Minimum seconds between GitHub contribution fetches — dedupes near-simultaneous
+# triggers (nightly/hourly/on-switch can coincide).
+GITHUB_FETCH_MIN_INTERVAL = 300
 
 # Screen 2 — partial-refresh regions (x must be multiple of 8)
 # Col2: upcoming episodes timers (after header at y=40, before footer at y=442)
@@ -73,8 +94,9 @@ def main():
     screen3 = Screen3(renderer)
     loading = LoadingScreen(renderer)
 
-    # Guards renderer/EPD access shared between the gpiozero button-callback
-    # thread (Screen 2 loading animation) and this function's scheduler loop.
+    # Guards renderer/EPD access shared between the gpiozero button-callback thread
+    # (Screen 2 loading animation, Screen 1 switch-in), the GitHub background-fetch
+    # thread (Screen 1 contributions grid), and this function's scheduler loop.
     render_lock = threading.Lock()
 
     current_screen      = 0
@@ -83,6 +105,7 @@ def main():
     last_s2_full        = 0.0   # epoch time of last Screen 2 full refresh
     s3_tick             = 0     # loop iterations since last Screen 3 art change
     last_maintenance    = None  # date of last display_maintenance() call
+    last_github_fetch   = 0.0   # epoch time of last GitHub contributions fetch attempt
 
     # ── Screen 1 helpers ────────────────────────────────────────────────────
 
@@ -99,6 +122,26 @@ def main():
             dt = get_now()
         _show(screen1.render(dt), maintenance)
         s1_partial_count = 0
+
+    def _github_fetch_async():
+        """Fetch fresh GitHub contributions off the render path, deduped by
+        GITHUB_FETCH_MIN_INTERVAL. On success, partial-refreshes just the grid
+        region — but only if Screen 1 is still showing, so it never draws over
+        Screen 2/3 content if the user switched away while the fetch was in flight."""
+        nonlocal last_github_fetch
+        now_ts = time.time()
+        if now_ts - last_github_fetch < GITHUB_FETCH_MIN_INTERVAL:
+            return
+        last_github_fetch = now_ts
+
+        def _work():
+            _, err = github_api.fetch_contributions()
+            if err is None and current_screen == 0:
+                with render_lock:
+                    img = screen1.render(get_now())
+                    renderer.display_partial(img, *S1_GITHUB_REGION)
+
+        threading.Thread(target=_work, daemon=True).start()
 
     # ── Screen 2 helpers ────────────────────────────────────────────────────
 
@@ -153,8 +196,10 @@ def main():
         nonlocal current_screen, s3_tick
         current_screen = idx
         if idx == 0:
-            s1_full_refresh()
-            renderer.init_partial()
+            with render_lock:
+                s1_full_refresh()
+                renderer.init_partial()
+            _github_fetch_async()
         elif idx == 1:
             def _prefetch():
                 data_layer.invalidate_cache()
@@ -176,8 +221,10 @@ def main():
     now = get_now()
     last_date        = now.date()
     last_maintenance = now.date()
-    s1_full_refresh(maintenance=True)   # startup counts as daily maintenance
-    renderer.init_partial()
+    with render_lock:
+        s1_full_refresh(maintenance=True)   # startup counts as daily maintenance
+        renderer.init_partial()
+    _github_fetch_async()   # warm the contributions grid on boot
 
     # ── Scheduler loop — wakes on each minute boundary ───────────────────────
 
@@ -193,19 +240,26 @@ def main():
             dt = get_now()
             if dt.date() != last_date:
                 last_date = dt.date()
-                s1_full_refresh(dt, maintenance=True)
+                with render_lock:
+                    s1_full_refresh(dt, maintenance=True)
+                    renderer.init_partial()
                 last_maintenance = today
-                renderer.init_partial()
+                _github_fetch_async()   # nightly refresh
             elif do_maintenance:
-                s1_full_refresh(dt, maintenance=True)
+                with render_lock:
+                    s1_full_refresh(dt, maintenance=True)
+                    renderer.init_partial()
                 last_maintenance = today
-                renderer.init_partial()
+                _github_fetch_async()   # nightly refresh (maintenance-day fallback path)
             elif s1_partial_count >= GHOST_CLEAR_AFTER:
-                s1_full_refresh(dt, maintenance=True)  # true full refresh every 5 partials
-                renderer.init_partial()
+                with render_lock:
+                    s1_full_refresh(dt, maintenance=True)  # true full refresh every 5 partials
+                    renderer.init_partial()
+                _github_fetch_async()   # hourly refresh
             else:
-                img = screen1.render(dt)
-                renderer.display_partial(img, CLOCK_X0, CLOCK_Y0, CLOCK_X1, CLOCK_Y1)
+                with render_lock:
+                    img = screen1.render(dt)
+                    renderer.display_partial(img, CLOCK_X0, CLOCK_Y0, CLOCK_X1, CLOCK_Y1)
                 s1_partial_count += 1
 
         elif current_screen == 1:
