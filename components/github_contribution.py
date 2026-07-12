@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 import config
+import api.github as _gh
 from utils.drawing import draw_gradient_bar
 
 
@@ -12,6 +13,17 @@ def _font(path: str, size: int):
 
 # BAR_Y = y + 164, BAR_H = 12 → component bottom = y + 176
 HEIGHT = 192
+
+# GitHub's 5-bucket contribution levels -> grayscale fill. Any day with no confirmed
+# level (not yet fetched, fetch error, or future) falls back to white (255) — see the
+# grid loop below.
+_LEVEL_TO_GRAY = {
+    'NONE':            255,
+    'FIRST_QUARTILE':  160,
+    'SECOND_QUARTILE': 100,
+    'THIRD_QUARTILE':  50,
+    'FOURTH_QUARTILE': 0,
+}
 
 
 def draw(image, x=0, y=None, today=None):
@@ -60,20 +72,33 @@ def draw(image, x=0, y=None, today=None):
     right_bar_w = x + config.DISPLAY_WIDTH - PADDING - right_bar_x
     draw_gradient_bar(image, right_bar_x, GRAD_Y, right_bar_w, GRAD_H, GRAD_R, reverse=True)
 
-    # --- GitHub-style year grid ---
+    # --- GitHub contribution grid: trailing 365-day window ending today (matches
+    # GitHub's own default contribution-graph framing — NOT the calendar year used by
+    # the stats line below, which is intentionally left on its own Jan1-Dec31 framing) ---
     GRID_TOP = y + 64
     SQUARE = 12
     STEP = 14   # 12px square + 2px gap
     ROWS = 7
+    WINDOW_DAYS = 365
 
-    first_dow = (year_start.weekday() + 1) % 7  # Sun=0
-    total_positions = first_dow + total_days
+    window_start = today - timedelta(days=WINDOW_DAYS - 1)
+    first_dow = (window_start.weekday() + 1) % 7  # Sun=0
+    total_positions = first_dow + WINDOW_DAYS
     num_cols = (total_positions + ROWS - 1) // ROWS
     grid_width = (num_cols - 1) * STEP + SQUARE
     GRID_LEFT = x + (config.DISPLAY_WIDTH - grid_width) // 2
     GRID_RIGHT = GRID_LEFT + grid_width
 
-    for day_idx in range(total_days):
+    contributions, _ = _gh.get_contributions()   # cache-only read, never blocks
+    days_map = (contributions or {}).get('days', {})
+
+    MONTHS_Y = y + 44
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    labeled_cols = set()
+
+    for day_idx in range(WINDOW_DAYS):
+        cur_date = window_start + timedelta(days=day_idx)
         pos = first_dow + day_idx
         col = pos // ROWS
         row = pos % ROWS
@@ -81,22 +106,19 @@ def draw(image, x=0, y=None, today=None):
         sq_y = GRID_TOP + row * STEP
         if sq_x + SQUARE > GRID_RIGHT:
             break
+        fill = _LEVEL_TO_GRAY.get(days_map.get(cur_date.isoformat()), 255)
         draw_ctx.rounded_rectangle(
             [sq_x, sq_y, sq_x + SQUARE - 1, sq_y + SQUARE - 1],
             radius=2,
-            fill=0 if day_idx <= elapsed else 255,
+            fill=fill,
             outline=0,
         )
-
-    # --- Month labels ---
-    MONTHS_Y = y + 44
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-    for i, name in enumerate(months):
-        first_of_month = (date(year, i + 1, 1) - year_start).days
-        col = (first_dow + first_of_month) // ROWS
-        draw_ctx.text((GRID_LEFT + col * STEP, MONTHS_Y), name, font=font_label, fill=0)
+        # Month label at the column where that month starts (a 365-day window can span
+        # parts of two calendar years, so the same month name may appear twice)
+        if cur_date.day == 1 and col not in labeled_cols:
+            labeled_cols.add(col)
+            draw_ctx.text((GRID_LEFT + col * STEP, MONTHS_Y), months[cur_date.month - 1],
+                           font=font_label, fill=0)
 
     # --- Stats line: "Progress 17%" ··· bar ··· "301 Days Left" ---
     STATS_Y = y + 178

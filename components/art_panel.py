@@ -2,7 +2,7 @@ import io
 from pathlib import Path
 
 from PIL import Image, ImageDraw
-import components.year_progress as _yp
+import components.github_contribution as _yp
 
 ICONS_DIR = Path(__file__).parent.parent / 'assets' / 'icons'
 
@@ -23,7 +23,7 @@ def draw_notif_bar(image, x=14, y=14, w=202) -> int:
 
 
 def draw(image, x=14, y=14, w=202):
-    # Art fills from below notif bar down to 10px above year_progress
+    # Art fills from below notif bar down to 10px above github_contribution
     art_y = y + NOTIF_H + NOTIF_GAP
     art_bottom = 480 - 14 - _yp.HEIGHT - 10
     art_h = art_bottom - art_y
