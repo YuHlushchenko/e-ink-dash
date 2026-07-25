@@ -3,12 +3,19 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 import components.github_contribution as _yp
+import utils.network_status as network_status
 
 ICONS_DIR = Path(__file__).parent.parent / 'assets' / 'icons'
 
 NOTIF_H = 28   # height of notification bar
 NOTIF_R = 4    # corner radius of notification bar
 NOTIF_GAP = 8  # gap between notif bar and art image
+
+_STATUS_ICON = {
+    'ok':          'wifi.svg',
+    'no_internet': 'wifi-alert.svg',
+    'no_network':  'wifi-off.svg',
+}
 
 
 def draw_notif_bar(image, x=14, y=14, w=202) -> int:
@@ -42,6 +49,7 @@ def _draw_notif_icons(image, panel_x, panel_y, panel_w):
     icons = [
         ('bell.svg',  panel_x + 5),
         ('stars.svg', panel_x + 23),
+        (_STATUS_ICON[network_status.get_status()], panel_x + 45),
     ]
     for filename, icon_x in icons:
         _paste_svg_icon(image, ICONS_DIR / filename, icon_x, icon_y, ICON_SIZE)
