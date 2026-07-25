@@ -28,6 +28,18 @@ Screen 3 update strategy:
   • Auto-slideshow: new random art every SLIDESHOW_INTERVAL seconds (config.py).
   • On manual switch: immediate new random art regardless of interval.
 
+Network status strategy (wifi icon in the shared Screen 1/2 notif bar):
+  • utils.network_status.check_and_update() runs once synchronously at startup (so the
+    first frame shows a real status), then every NETWORK_CHECK_INTERVAL seconds forever
+    on its own background thread — independent of which screen is showing, so status
+    never goes stale while parked on Screen 3.
+  • The display is only touched if the status actually changed AND Screen 1 or 2 is
+    currently showing (the only screens with a notif bar); then just S1_WIFI_REGION is
+    partial-refreshed. A stable connection therefore never triggers a partial refresh
+    from this path at all — components/art_panel.py reads the cached status on every
+    full render anyway, so switch-in/hourly/midnight refreshes always show it fresh
+    without any extra work here.
+
 Clock partial-refresh region (x must be multiple of 8):
   CLOCK_X0=224, CLOCK_Y0=8, CLOCK_X1=496, CLOCK_Y1=272
 
@@ -37,9 +49,10 @@ Screen 2 partial-refresh regions (x must be multiple of 8):
 
 render_lock guards renderer/EPD access shared between the gpiozero button-callback
 thread (Screen 2's loading animation, Screen 1 switch-in), the GitHub background-fetch
-thread (Screen 1's contributions grid), and this function's scheduler loop. Screen 1 and
-Screen 2 are now both covered; Screen 3 render calls remain unlocked (accepted gap —
-Screen 3 has no background writer thread of its own).
+thread (Screen 1's contributions grid), the network-status poll thread (wifi icon), and
+this function's scheduler loop. Screen 1 and Screen 2 are now both covered; Screen 3
+render calls remain unlocked (accepted gap — Screen 3 has no background writer thread
+of its own).
 """
 import time
 import signal
@@ -54,6 +67,7 @@ from screens.loading_screen import LoadingScreen
 from utils.time import get_now
 import api.screen2_data as data_layer
 import api.github as github_api
+import utils.network_status as network_status
 from config import BTN_NEXT_PIN, BTN_PREV_PIN, BTN_BOUNCE_TIME, SLIDESHOW_INTERVAL
 
 # Screen 2 loading animation — seconds between dot-frame updates
@@ -68,6 +82,14 @@ S1_GITHUB_REGION = (0, 274, 800, 466)
 # Minimum seconds between GitHub contribution fetches — dedupes near-simultaneous
 # triggers (nightly/hourly/on-switch can coincide).
 GITHUB_FETCH_MIN_INTERVAL = 300
+
+# Screen 1/2 — wifi status icon partial-refresh region (8-pixel-aligned x), inside
+# the shared notif bar (x=14, y=14, w=202) drawn by both screens.
+S1_WIFI_REGION = (56, 14, 80, 42)
+
+# Seconds between network connectivity checks — background poll loop, independent
+# of which screen is currently shown (see "Network status helpers" below).
+NETWORK_CHECK_INTERVAL = 30
 
 # Screen 2 — partial-refresh regions (x must be multiple of 8)
 # Col2: upcoming episodes timers (after header at y=40, before footer at y=442)
@@ -165,6 +187,25 @@ def main():
         renderer.display_partial(img, *S2_COL1)
         s2_partial_count += 1
 
+    # ── Network status helpers ──────────────────────────────────────────────
+
+    def _network_check_loop():
+        """Poll connectivity every NETWORK_CHECK_INTERVAL seconds, forever, regardless
+        of which screen is showing (so the status never goes stale while on Screen 3).
+        Only touches the display if the status actually changed AND Screen 1/2 (the
+        only screens with a notif bar) is currently showing."""
+        while True:
+            time.sleep(NETWORK_CHECK_INTERVAL)
+            old = network_status.get_status()
+            new = network_status.check_and_update()
+            if new != old and current_screen in (0, 1):
+                with render_lock:
+                    if current_screen == 0:
+                        img = screen1.render(get_now())
+                    else:
+                        img = screen2.render()
+                    renderer.display_partial(img, *S1_WIFI_REGION)
+
     # ── Screen switching ─────────────────────────────────────────────────────
 
     def s3_show(maintenance=False):
@@ -218,6 +259,8 @@ def main():
 
     # ── Initial render ───────────────────────────────────────────────────────
 
+    network_status.check_and_update()   # synchronous — first frame should show real status
+
     now = get_now()
     last_date        = now.date()
     last_maintenance = now.date()
@@ -225,6 +268,7 @@ def main():
         s1_full_refresh(maintenance=True)   # startup counts as daily maintenance
         renderer.init_partial()
     _github_fetch_async()   # warm the contributions grid on boot
+    threading.Thread(target=_network_check_loop, daemon=True).start()
 
     # ── Scheduler loop — wakes on each minute boundary ───────────────────────
 

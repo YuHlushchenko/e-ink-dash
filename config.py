@@ -24,6 +24,9 @@ TIMEZONE = 'Europe/Kyiv'
 WORK_START = 10   # work begins at 10:00
 WORK_END   = 19   # work ends   at 19:00
 
+# --- Network status icon (art_panel notif bar) ---
+NETWORK_IFACE = 'wlan0'
+
 # --- Date/time override for testing ---
 # MOCK_NOW: freeze time at a specific datetime (all components see this time).
 # TIME_OFFSET: shift real time by a timedelta (time still advances).
